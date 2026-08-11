@@ -1,0 +1,23 @@
+{
+  "name": "@gameshow/party",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc -b && wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@gameshow/schema": "workspace:*",
+    "partyserver": "^0.5.10"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.20.3",
+    "@cloudflare/workers-types": "^5.20260809.1",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.120.0"
+  }
+}

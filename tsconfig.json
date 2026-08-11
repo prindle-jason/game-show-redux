@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/schema" },
+    { "path": "./packages/party" },
+    { "path": "./packages/builder-app" },
+    { "path": "./packages/player-app" }
+  ]
+}
