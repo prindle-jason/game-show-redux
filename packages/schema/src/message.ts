@@ -13,10 +13,19 @@ import { roundSchema } from './round.js';
 export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('join'), name: z.string().min(1) }),
   z.object({ type: z.literal('add-round-to-queue'), round: roundSchema }),
-  z.object({ type: z.literal('remove-from-queue'), queueEntryId: z.string().min(1) }),
-  z.object({ type: z.literal('reorder-queue'), queueEntryIds: z.array(z.string().min(1)) }),
+  z.object({
+    type: z.literal('remove-from-queue'),
+    queueEntryId: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal('reorder-queue'),
+    queueEntryIds: z.array(z.string().min(1)),
+  }),
   z.object({ type: z.literal('start-game') }),
   z.object({ type: z.literal('advance-queue') }),
+  z.object({ type: z.literal('return-to-lobby') }),
+  z.object({ type: z.literal('reset-scores') }),
+  z.object({ type: z.literal('kick-player'), playerId: z.string().min(1) }),
   z.object({ type: z.literal('round-action'), action: z.unknown() }),
 ]);
 
@@ -27,5 +36,7 @@ export type ClientMessage = z.infer<typeof clientMessageSchema>;
  * controls their shape (see room.ts for the host/contestant view split).
  */
 export type ServerMessage =
+  | { type: 'joined'; playerId: string; isHost: boolean }
+  | { type: 'kicked'; reason?: string }
   | { type: 'room-state'; view: HostRoomView | ContestantRoomView }
   | { type: 'error'; message: string };

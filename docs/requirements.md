@@ -26,10 +26,12 @@ Clues support image/audio/video, not just text.
 
 ## Rooms
 
-- **No accounts.** Host creates a room and shares a code/link; contestants join with just a display name.
+- **No accounts.** Host = whoever creates the room. In practice that's the first person to join a given room code — there's no separate "create room" step yet, so joining an empty code creates and hosts it. Contestants join the same code/link with just a display name. (A server-issued room code / shareable join link is a planned enhancement — see [future-enhancements.md](./future-enhancements.md).)
 - Small rooms: up to ~8 contestants. No spectator role in v1.
 - **Queue is host-only and lobby-only**: only the host can add/remove/reorder rounds, and only while the room is in its lobby phase. Once the game starts, the queue advances round by round; contestants see queue progress (status/count) but never an upcoming round's content.
-- **Full reconnect support**: room state (queue, board, scores, buzz order, current question) lives in the PartyKit room's durable storage. Rejoining with the same room code + name resumes where a player left off.
+- **Host can also reset scores or kick a player, both lobby-only.** Kicking is temporary — no blocklist, so a kicked player can immediately rejoin under the same name.
+- **The host can return to the lobby after a game ends** (`ended → lobby`), which clears the queue but keeps scores — letting the same group play again without losing standings.
+- **Reconnect is name-based, not durable.** Rejoining with the same room code + display name reuses that player's id and score. Room state currently lives only in the Durable Object's in-memory JS state, not durable storage, so an idle room being evicted, an error, or a redeploy wipes it. See [future-enhancements.md](./future-enhancements.md) for both the durability gap and the planned move to session-token-based reconnect.
 
 ## Persistence
 
