@@ -56,6 +56,7 @@ export interface WheelState {
  * letters) so the puzzle answer itself never reaches contestants early.
  */
 export interface WheelContestantView {
+  type: 'wheel-of-fortune';
   category: string;
   revealedSolution: string[][];
   wedges: WheelWedge[];

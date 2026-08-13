@@ -5,6 +5,7 @@ import {
   advanceQueue,
   applyDisconnect,
   applyJoin,
+  applyScoreDeltas,
   createInitialRoomState,
   kickPlayer,
   removeFromQueue,
@@ -190,6 +191,109 @@ describe('phase transitions', () => {
     const { state, playerId } = roomWithQueuedRound();
     const result = advanceQueue(state, playerId);
     expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+});
+
+describe('applyScoreDeltas', () => {
+  it('adds deltas to matching players and leaves others untouched', () => {
+    const players = [
+      { id: 'p1', name: 'A', score: 100, connected: true },
+      { id: 'p2', name: 'B', score: 50, connected: true },
+    ];
+    const result = applyScoreDeltas(players, { p1: -20 });
+    expect(result).toEqual([
+      { id: 'p1', name: 'A', score: 80, connected: true },
+      { id: 'p2', name: 'B', score: 50, connected: true },
+    ]);
+  });
+
+  it('returns the same players when deltas is undefined', () => {
+    const players = [{ id: 'p1', name: 'A', score: 100, connected: true }];
+    expect(applyScoreDeltas(players, undefined)).toEqual(players);
+  });
+});
+
+describe('activeRoundState', () => {
+  function roomWithContestant() {
+    const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
+    const contestant = joinRoom(state, 'Sam');
+    const withRound = addRoundToQueue(contestant.state, FIXTURE_ROUND, playerId);
+    if (!withRound.ok) throw new Error('unreachable');
+    return { state: withRound.state, playerId, contestantId: contestant.playerId };
+  }
+
+  it('populates a jeopardy activeRoundState when start-game runs', () => {
+    const { state, playerId, contestantId } = roomWithContestant();
+    const result = startGame(state, playerId);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.state.activeRoundState).toMatchObject({
+      type: 'jeopardy',
+      revealedClues: [],
+      activeClue: null,
+    });
+    expect(result.state.activeRoundState?.type).toBe('jeopardy');
+    if (result.state.activeRoundState?.type === 'jeopardy') {
+      expect(result.state.activeRoundState.controllingPlayerId).toBe(contestantId);
+    }
+  });
+
+  it('re-initializes activeRoundState for the next queue entry on advance-queue', () => {
+    const { state, playerId } = roomWithContestant();
+    const second = addRoundToQueue(state, { ...FIXTURE_ROUND, roundId: 'round-2' }, playerId);
+    if (!second.ok) throw new Error('unreachable');
+    const started = startGame(second.state, playerId);
+    if (!started.ok) throw new Error('unreachable');
+
+    const advanced = advanceQueue(started.state, playerId);
+    expect(advanced.ok).toBe(true);
+    if (!advanced.ok) throw new Error('unreachable');
+    expect(advanced.state.activeRoundState?.type).toBe('jeopardy');
+  });
+
+  it('clears activeRoundState once the queue is exhausted', () => {
+    const { state, playerId } = roomWithContestant();
+    const started = startGame(state, playerId);
+    if (!started.ok) throw new Error('unreachable');
+    const ended = advanceQueue(started.state, playerId);
+    expect(ended.ok).toBe(true);
+    if (!ended.ok) throw new Error('unreachable');
+    expect(ended.state.phase).toBe('ended');
+    expect(ended.state.activeRoundState).toBeNull();
+  });
+
+  it('resets roundComplete on start-game and advance-queue, and shows it to contestants', () => {
+    const { state, playerId } = roomWithContestant();
+    const second = addRoundToQueue(state, { ...FIXTURE_ROUND, roundId: 'round-2' }, playerId);
+    if (!second.ok) throw new Error('unreachable');
+    const started = startGame(second.state, playerId);
+    if (!started.ok) throw new Error('unreachable');
+    expect(started.state.roundComplete).toBe(false);
+    expect(toContestantView(started.state).roundComplete).toBe(false);
+
+    const midRound = { ...started.state, roundComplete: true };
+    expect(toContestantView(midRound).roundComplete).toBe(true);
+
+    const advanced = advanceQueue(midRound, playerId);
+    expect(advanced.ok).toBe(true);
+    if (!advanced.ok) throw new Error('unreachable');
+    expect(advanced.state.roundComplete).toBe(false);
+  });
+
+  it('exposes a filtered jeopardy view to contestants, hiding answers', () => {
+    const { state, playerId } = roomWithContestant();
+    const started = startGame(state, playerId);
+    if (!started.ok) throw new Error('unreachable');
+
+    const view = toContestantView(started.state);
+    expect(view.activeRoundState?.type).toBe('jeopardy');
+    if (view.activeRoundState?.type === 'jeopardy') {
+      expect(view.activeRoundState).not.toHaveProperty('answer');
+      expect(view.activeRoundState.categories[0]?.clues[0]).toEqual({
+        value: 200,
+        revealed: false,
+      });
+    }
   });
 });
 

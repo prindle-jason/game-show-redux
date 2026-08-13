@@ -1,4 +1,29 @@
 import type { ContestantRoomView, Player, QueueEntry, RoomState, Round } from '@gameshow/schema';
+import { roundModules } from '../rounds/index.js';
+
+function contestantIds(state: RoomState): string[] {
+  return state.players.filter((player) => player.id !== state.hostId).map((player) => player.id);
+}
+
+function activeRoundStateFor(state: RoomState, entry: QueueEntry) {
+  const module = roundModules[entry.round.type];
+  if (!module) return null;
+  return module.createInitialState(entry.round.data, {
+    roundId: entry.round.roundId,
+    contestantIds: contestantIds(state),
+  });
+}
+
+export function applyScoreDeltas(
+  players: Player[],
+  deltas: Record<string, number> | undefined,
+): Player[] {
+  if (!deltas) return players;
+  return players.map((player) => {
+    const delta = deltas[player.id];
+    return delta ? { ...player, score: player.score + delta } : player;
+  });
+}
 
 export function createInitialRoomState(): RoomState {
   return {
@@ -7,6 +32,7 @@ export function createInitialRoomState(): RoomState {
     players: [],
     queue: [],
     activeRoundState: null,
+    roundComplete: false,
   };
 }
 
@@ -130,10 +156,20 @@ export function startGame(state: RoomState, requesterId: string): ActionResult {
   if (state.queue.length === 0)
     return { ok: false, error: 'Add at least one round before starting' };
 
+  const firstEntry = state.queue[0];
   const queue = state.queue.map((entry, index) =>
     index === 0 ? { ...entry, status: 'active' as const } : entry,
   );
-  return { ok: true, state: { ...state, phase: 'playing', queue } };
+  return {
+    ok: true,
+    state: {
+      ...state,
+      phase: 'playing',
+      queue,
+      activeRoundState: firstEntry ? activeRoundStateFor(state, firstEntry) : null,
+      roundComplete: false,
+    },
+  };
 }
 
 export function advanceQueue(state: RoomState, requesterId: string): ActionResult {
@@ -146,6 +182,7 @@ export function advanceQueue(state: RoomState, requesterId: string): ActionResul
 
   const nextIndex = activeIndex + 1;
   const hasNext = nextIndex < state.queue.length;
+  const nextEntry = state.queue[nextIndex];
   const queue = state.queue.map((entry, index) => {
     if (index === activeIndex) return { ...entry, status: 'completed' as const };
     if (hasNext && index === nextIndex) return { ...entry, status: 'active' as const };
@@ -154,7 +191,13 @@ export function advanceQueue(state: RoomState, requesterId: string): ActionResul
 
   return {
     ok: true,
-    state: { ...state, phase: hasNext ? 'playing' : 'ended', queue },
+    state: {
+      ...state,
+      phase: hasNext ? 'playing' : 'ended',
+      queue,
+      activeRoundState: hasNext && nextEntry ? activeRoundStateFor(state, nextEntry) : null,
+      roundComplete: false,
+    },
   };
 }
 
@@ -199,12 +242,15 @@ export function kickPlayer(state: RoomState, playerId: string, requesterId: stri
   };
 }
 
-/**
- * Per-round-type contestant-view filtering for `activeRoundState` lands with
- * the round-type behavior modules (next milestone); this milestone never
- * sets `activeRoundState`, so there's nothing to filter yet.
- */
+/** Filters `activeRoundState` through the active round's own contestant-view function, if any. */
 export function toContestantView(state: RoomState): ContestantRoomView {
+  const activeEntry = state.queue.find((entry) => entry.status === 'active');
+  const module = activeEntry ? roundModules[activeEntry.round.type] : undefined;
+  const activeRoundState =
+    activeEntry && module && state.activeRoundState
+      ? module.toContestantView(state.activeRoundState, activeEntry.round.data)
+      : null;
+
   return {
     phase: state.phase,
     players: state.players,
@@ -212,6 +258,7 @@ export function toContestantView(state: RoomState): ContestantRoomView {
       queueEntryId: entry.queueEntryId,
       status: entry.status,
     })),
-    activeRoundState: null,
+    activeRoundState,
+    roundComplete: state.roundComplete,
   };
 }

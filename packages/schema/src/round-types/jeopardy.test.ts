@@ -39,6 +39,7 @@ describe('jeopardyActionSchema', () => {
     { type: 'wager', amount: 500 },
     { type: 'buzz' },
     { type: 'judge', correct: true },
+    { type: 'skip-clue' },
   ])('accepts a valid $type action', (action) => {
     expect(jeopardyActionSchema.safeParse(action).success).toBe(true);
   });

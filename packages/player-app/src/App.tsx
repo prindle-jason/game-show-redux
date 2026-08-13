@@ -2,6 +2,7 @@ import { SCHEMA_PACKAGE_NAME } from '@gameshow/schema';
 import { useState } from 'react';
 import { createFixtureRound } from './fixtures.js';
 import { useRoomStore } from './room-store.js';
+import { roundBoards } from './rounds/index.js';
 
 function JoinForm() {
   const [roomCode, setRoomCode] = useState('');
@@ -143,6 +144,7 @@ function ConnectedRoom() {
   }
 
   const queueIds = view.queue.map((entry) => entry.queueEntryId);
+  const Board = view.activeRoundState ? roundBoards[view.activeRoundState.type] : undefined;
 
   return (
     <div>
@@ -166,8 +168,15 @@ function ConnectedRoom() {
         ))}
       </ul>
       {self.isHost && <HostControls phase={view.phase} queueIds={queueIds} />}
-      <h2>Raw state</h2>
-      <pre>{JSON.stringify(view, null, 2)}</pre>
+      {view.phase === 'playing' && view.roundComplete && <p>Round complete</p>}
+      {Board ? (
+        <Board view={view} playerId={self.playerId} isHost={self.isHost} />
+      ) : (
+        <>
+          <h2>Raw state</h2>
+          <pre>{JSON.stringify(view, null, 2)}</pre>
+        </>
+      )}
     </div>
   );
 }

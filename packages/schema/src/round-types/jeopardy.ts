@@ -26,6 +26,7 @@ export type JeopardyBoardData = z.infer<typeof jeopardyBoardDataSchema>;
  * `wager` covers Daily Double only — Final Jeopardy is a separate round type.
  * Re-buzzing after an incorrect answer is a `party` state-machine concern,
  * not a distinct action here (the client just sends `buzz` again).
+ * `skip-clue` lets the host resolve a clue nobody will answer (no scoring).
  */
 export const jeopardyActionSchema = z.discriminatedUnion('type', [
   z.object({
@@ -36,6 +37,7 @@ export const jeopardyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('wager'), amount: z.number().int().nonnegative() }),
   z.object({ type: z.literal('buzz') }),
   z.object({ type: z.literal('judge'), correct: z.boolean() }),
+  z.object({ type: z.literal('skip-clue') }),
 ]);
 
 export type JeopardyAction = z.infer<typeof jeopardyActionSchema>;
@@ -43,7 +45,9 @@ export type JeopardyAction = z.infer<typeof jeopardyActionSchema>;
 /**
  * `party`-owned runtime state (plain TS, not zod — never validated, only
  * ever constructed by `party`). `pendingWager` covers a Daily Double wager
- * submitted before its clue is revealed.
+ * submitted before its clue is revealed. `controllingPlayerId` is the only
+ * player allowed to wager on a Daily Double — it's seeded deterministically
+ * from the round at creation time and updated to whoever answers correctly.
  */
 export interface JeopardyState {
   type: 'jeopardy';
@@ -52,6 +56,7 @@ export interface JeopardyState {
   buzzedPlayerId: string | null;
   lockedOutPlayerIds: string[];
   pendingWager: number | null;
+  controllingPlayerId: string | null;
 }
 
 /**
@@ -60,6 +65,7 @@ export interface JeopardyState {
  * text stay hidden until that clue becomes `activeClue`.
  */
 export interface JeopardyContestantView {
+  type: 'jeopardy';
   categories: Array<{
     name: string;
     clues: Array<{ value: number; revealed: boolean }>;
@@ -73,4 +79,5 @@ export interface JeopardyContestantView {
   buzzedPlayerId: string | null;
   lockedOutPlayerIds: string[];
   pendingWager: number | null;
+  controllingPlayerId: string | null;
 }

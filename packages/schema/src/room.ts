@@ -38,6 +38,12 @@ export interface RoomState {
    * `phase` isn't `'playing'`.
    */
   activeRoundState: RoundState | null;
+  /**
+   * True once the active round's own completion rule is satisfied (e.g. every
+   * Jeopardy clue revealed). Advancing stays a host action — this only signals
+   * that nothing is left to play.
+   */
+  roundComplete: boolean;
 }
 
 /** What the host receives: the full, unfiltered room state. */
@@ -59,4 +65,5 @@ export interface ContestantRoomView {
   players: Player[];
   queue: QueueEntryView[];
   activeRoundState: RoundContestantView | null;
+  roundComplete: boolean;
 }

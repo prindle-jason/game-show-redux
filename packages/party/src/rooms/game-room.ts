@@ -1,13 +1,15 @@
 import type { ClientMessage, RoomState, ServerMessage } from '@gameshow/schema';
-import { clientMessageSchema } from '@gameshow/schema';
+import { clientMessageSchema, roundTypeDefinitions } from '@gameshow/schema';
 import { type Connection, Server, type WSMessage } from 'partyserver';
 import type { Env } from '../env.js';
+import { roundModules } from '../rounds/index.js';
 import {
   type ActionResult,
   addRoundToQueue,
   advanceQueue,
   applyDisconnect,
   applyJoin,
+  applyScoreDeltas,
   createInitialRoomState,
   kickPlayer,
   removeFromQueue,
@@ -71,10 +73,7 @@ export class GameRoom extends Server<Env> {
     let actionResult: ActionResult;
     switch (message.type) {
       case 'round-action':
-        send(connection, {
-          type: 'error',
-          message: 'Round gameplay is not implemented yet',
-        });
+        this.handleRoundAction(connection, playerId, message.action);
         return;
       case 'add-round-to-queue':
         actionResult = addRoundToQueue(this.state, message.round, playerId);
@@ -120,6 +119,54 @@ export class GameRoom extends Server<Env> {
     }
 
     this.state = actionResult.state;
+    this.broadcastViews();
+  }
+
+  private handleRoundAction(
+    connection: Connection<ConnectionState>,
+    playerId: string,
+    action: unknown,
+  ): void {
+    const activeEntry = this.state.queue.find((entry) => entry.status === 'active');
+    const activeRoundState = this.state.activeRoundState;
+    if (!activeEntry || !activeRoundState) {
+      send(connection, { type: 'error', message: 'No round is in progress' });
+      return;
+    }
+
+    const module = roundModules[activeEntry.round.type];
+    if (!module) {
+      send(connection, { type: 'error', message: 'Round gameplay is not implemented yet' });
+      return;
+    }
+
+    const parsedAction =
+      roundTypeDefinitions[activeEntry.round.type].actionSchema.safeParse(action);
+    if (!parsedAction.success) {
+      send(connection, { type: 'error', message: 'Invalid round action' });
+      return;
+    }
+
+    const contestantIds = this.state.players
+      .filter((player) => player.id !== this.state.hostId)
+      .map((player) => player.id);
+    const result = module.reduce(activeRoundState, activeEntry.round.data, parsedAction.data, {
+      requesterId: playerId,
+      isHost: playerId === this.state.hostId,
+      contestantIds,
+    });
+
+    if (!result.ok) {
+      send(connection, { type: 'error', message: result.error });
+      return;
+    }
+
+    this.state = {
+      ...this.state,
+      activeRoundState: result.state,
+      roundComplete: module.isComplete(result.state, activeEntry.round.data),
+      players: applyScoreDeltas(this.state.players, result.scoreDeltas),
+    };
     this.broadcastViews();
   }
 

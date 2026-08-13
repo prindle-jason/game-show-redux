@@ -43,6 +43,7 @@ export interface FinalJeopardyState {
  * only appears here once `reveal-next` has surfaced them.
  */
 export interface FinalJeopardyContestantView {
+  type: 'final-jeopardy';
   category: string;
   clue: ClueContent;
   hasWagered: boolean;
