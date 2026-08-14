@@ -33,9 +33,10 @@ function noopResolveMediaRef(ref: MediaRef): ResolvedMediaRef {
 const RESOLVED_BOARD = resolveJeopardyMedia(BOARD, noopResolveMediaRef);
 
 const CONTESTANT_IDS = ['p1', 'p2'];
-const HOST_CTX = { requesterId: 'host', isHost: true, contestantIds: CONTESTANT_IDS };
+const PLAYERS = CONTESTANT_IDS.map((id) => ({ id, name: id, score: 0 }));
+const HOST_CTX = { requesterId: 'host', isHost: true, players: PLAYERS };
 function ctxFor(requesterId: string) {
-  return { requesterId, isHost: false, contestantIds: CONTESTANT_IDS };
+  return { requesterId, isHost: false, players: PLAYERS };
 }
 
 function initialState() {

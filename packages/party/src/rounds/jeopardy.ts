@@ -75,7 +75,7 @@ export interface JeopardyActionContext {
   requesterId: string;
   isHost: boolean;
   /** All players except the host — who's eligible to buzz/wager/be locked out. */
-  contestantIds: string[];
+  players: { id: string; name: string; score: number }[];
 }
 
 /** Deterministic string hash so the starting controller is reproducible per round. */
@@ -247,7 +247,7 @@ function judge(
   }
 
   const lockedOutPlayerIds = [...state.lockedOutPlayerIds, buzzedPlayerId];
-  const stillEligible = context.contestantIds.some((id) => !lockedOutPlayerIds.includes(id));
+  const stillEligible = context.players.some((p) => !lockedOutPlayerIds.includes(p.id));
   if (!stillEligible) {
     return {
       ok: true,

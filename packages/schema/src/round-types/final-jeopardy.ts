@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ClueContent } from '../clue-content.js';
+import type { ResolvedClueContent } from '../clue-content.js';
 import { clueContentSchema } from '../clue-content.js';
 
 export const finalJeopardyDataSchema = z.object({
@@ -18,35 +18,58 @@ export type FinalJeopardyData = z.infer<typeof finalJeopardyDataSchema>;
 export const finalJeopardyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('wager'), amount: z.number().int().nonnegative() }),
   z.object({ type: z.literal('submit-answer'), answer: z.string() }),
-  z.object({ type: z.literal('reveal-next') }),
+  z.object({ type: z.literal('advance') }),
+  z.object({ type: z.literal('reveal-answer') }),
+  z.object({ type: z.literal('reveal-wager') }),
   z.object({ type: z.literal('judge'), playerId: z.string(), correct: z.boolean() }),
 ]);
 
 export type FinalJeopardyAction = z.infer<typeof finalJeopardyActionSchema>;
 
+export type FinalJeopardyPhase = 'category' | 'wagering' | 'answering' | 'revealing' | 'summary';
+
+/** Where the currently-revealing contestant is in their own reveal walk. */
+export type RevealStage = 'hidden' | 'answer' | 'wager' | 'judged';
+
 /**
  * `party`-owned runtime state (plain TS, not zod — never validated, only
- * ever constructed by `party`). `revealOrder` is the sequence `reveal-next`
- * has walked through so far (each player's wager/answer/judgment).
+ * ever constructed by `party`). `contestantIds` is the fixed set of players
+ * in this round, captured at creation so late joiners/leavers don't shift
+ * wagering or the reveal walk mid-round. `revealOrder` is computed once,
+ * ascending by score, when `phase` becomes `revealing`.
  */
 export interface FinalJeopardyState {
   type: 'final-jeopardy';
+  phase: FinalJeopardyPhase;
+  contestantIds: string[];
   wagers: Record<string, number>;
   answers: Record<string, string>;
   judgments: Record<string, boolean>;
   revealOrder: string[];
+  revealIndex: number;
+  revealStage: RevealStage;
 }
 
 /**
  * What contestants receive instead of `FinalJeopardyState` + the round's
- * `data` — `category`/`clue` are public, but another player's wager/answer
- * only appears here once `reveal-next` has surfaced them.
+ * `data`. `clue` is withheld until `phase` reaches `answering` (no clue until
+ * after wagering). `current` describes the contestant presently being
+ * revealed and how far their reveal has progressed; `revealed` holds every
+ * contestant judged so far, each entry only carrying what's been revealed
+ * for them (progressive per `revealStage`).
  */
 export interface FinalJeopardyContestantView {
   type: 'final-jeopardy';
+  phase: FinalJeopardyPhase;
   category: string;
-  clue: ClueContent;
+  clue: ResolvedClueContent | null;
   hasWagered: boolean;
   hasAnswered: boolean;
-  revealed: Array<{ playerId: string; wager: number; answer: string; correct: boolean }>;
+  current: { playerId: string; stage: RevealStage } | null;
+  revealed: Array<{
+    playerId: string;
+    wager?: number;
+    answer?: string;
+    correct?: boolean;
+  }>;
 }

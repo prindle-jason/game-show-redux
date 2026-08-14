@@ -318,12 +318,12 @@ export function kickPlayer(state: RoomState, playerId: string, requesterId: stri
 }
 
 /** Filters `activeRoundState` through the active round's own contestant-view function, if any. */
-export function toContestantView(state: RoomState): ContestantRoomView {
+export function toContestantView(state: RoomState, viewerId: string): ContestantRoomView {
   const activeEntry = state.queue.find((entry) => entry.status === 'active');
   const module = activeEntry ? roundModules[activeEntry.round.type] : undefined;
   const activeRoundState =
     activeEntry && module && state.activeRoundState
-      ? module.toContestantView(state.activeRoundState, activeEntry.resolvedData)
+      ? module.toContestantView(state.activeRoundState, activeEntry.resolvedData, viewerId)
       : null;
 
   return {

@@ -60,6 +60,24 @@ export function createFixtureRound(): Round {
   };
 }
 
+/**
+ * Hand-authored Final Jeopardy fixture round, to exercise the phase machine
+ * until real round import/authoring exists.
+ */
+export function createFinalJeopardyFixtureRound(): Round {
+  return {
+    schemaVersion: 1,
+    roundId: crypto.randomUUID(),
+    title: 'Final Jeopardy (fixture)',
+    type: 'final-jeopardy',
+    data: {
+      category: 'World Capitals',
+      clue: { text: 'This African capital sits at the highest elevation of any national capital' },
+      answer: { text: 'What is Addis Ababa?' },
+    },
+  };
+}
+
 async function fetchAsBlob(url: string): Promise<Blob> {
   const response = await fetch(url);
   if (!response.ok) {

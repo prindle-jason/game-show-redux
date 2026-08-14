@@ -1,5 +1,7 @@
 # Next milestone: media upload & serving (R2)
 
+**Status: Complete.** `typecheck`/`lint`/`test`/`build` are green across the monorepo; upload/serve/cleanup routes, the upload-token auth, the media-ready readiness barrier (timeout + host override), and queue-removal cleanup are all implemented and unit-tested. The two-browser-tabs manual playthrough and the "same flow against the real deployed bucket" check haven't been re-confirmed since; do those before considering this fully closed out.
+
 ## Context
 
 The `MEDIA` R2 binding has existed since the first deploy (`packages/party/wrangler.jsonc`, typed in `env.ts`) — the `gameshow-media` bucket is live and required for `party` to deploy — but no code reads or writes it. `@gameshow/schema` already models media the right way: `MediaRef` carries an `assetId` (image/audio/video/slideshow), `ClueContent` embeds it, and `media.ts` explicitly notes that resolving an `assetId` to an R2 URL is `party`'s concern. Nothing does that resolution yet — `player-app` renders a literal `[media]` placeholder wherever a clue has media (`JeopardyBoard.tsx`).

@@ -1,5 +1,7 @@
 # Next milestone: Jeopardy round, end to end
 
+**Status: Complete.** `typecheck`/`lint`/`test`/`build` are green across the monorepo; the reduce state machine (buzz race, lockout/reopen, Daily Double wager, scoring, completion) and the board UI (grid, buzz, judge controls, wager input) are implemented and unit-tested. The two-browser-tabs manual playthrough hasn't been re-confirmed since; do that before considering this fully closed out.
+
 ## Context
 
 The room shell milestone is complete — `party` holds real `RoomState`, and `player-app` can join/queue/start a game, but only renders a raw JSON dump of whatever comes back. No round type has any actual behavior yet; `@gameshow/schema`'s Jeopardy contract (`JeopardyBoardData`, `JeopardyAction`, `JeopardyState`, `JeopardyContestantView`) has been sitting fully designed and untouched since the schema milestone.

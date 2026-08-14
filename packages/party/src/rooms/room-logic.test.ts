@@ -328,7 +328,7 @@ describe('activeRoundState', () => {
   });
 
   it('resets roundComplete on start-game and advance-queue, and shows it to contestants', () => {
-    const { state, playerId } = roomWithContestant();
+    const { state, playerId, contestantId } = roomWithContestant();
     const second = addRoundToQueue(
       state,
       { ...FIXTURE_ROUND, roundId: 'round-2' },
@@ -339,10 +339,10 @@ describe('activeRoundState', () => {
     const started = startGame(second.state, playerId);
     if (!started.ok) throw new Error('unreachable');
     expect(started.state.roundComplete).toBe(false);
-    expect(toContestantView(started.state).roundComplete).toBe(false);
+    expect(toContestantView(started.state, contestantId).roundComplete).toBe(false);
 
     const midRound = { ...started.state, roundComplete: true };
-    expect(toContestantView(midRound).roundComplete).toBe(true);
+    expect(toContestantView(midRound, contestantId).roundComplete).toBe(true);
 
     const advanced = advanceQueue(midRound, playerId);
     expect(advanced.ok).toBe(true);
@@ -351,11 +351,11 @@ describe('activeRoundState', () => {
   });
 
   it('exposes a filtered jeopardy view to contestants, hiding answers', () => {
-    const { state, playerId } = roomWithContestant();
+    const { state, playerId, contestantId } = roomWithContestant();
     const started = startGame(state, playerId);
     if (!started.ok) throw new Error('unreachable');
 
-    const view = toContestantView(started.state);
+    const view = toContestantView(started.state, contestantId);
     expect(view.activeRoundState?.type).toBe('jeopardy');
     if (view.activeRoundState?.type === 'jeopardy') {
       expect(view.activeRoundState).not.toHaveProperty('answer');
@@ -370,10 +370,16 @@ describe('activeRoundState', () => {
 describe('toContestantView', () => {
   it('never exposes hostId or round content', () => {
     const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
-    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
+    const contestant = joinRoom(state, 'Sam');
+    const withRound = addRoundToQueue(
+      contestant.state,
+      FIXTURE_ROUND,
+      playerId,
+      noopResolveMediaRef,
+    );
     if (!withRound.ok) throw new Error('unreachable');
 
-    const view = toContestantView(withRound.state);
+    const view = toContestantView(withRound.state, contestant.playerId);
     expect(view).not.toHaveProperty('hostId');
     expect(view.queue).toEqual([
       { queueEntryId: withRound.state.queue[0]?.queueEntryId, status: 'pending' },
@@ -580,16 +586,16 @@ describe('media readiness barrier', () => {
   });
 
   it('exposes mediaUrls to contestants for loading and active entries', () => {
-    const { state, hostId } = roomWithMediaRound();
+    const { state, hostId, contestantId } = roomWithMediaRound();
     const started = startGame(state, hostId);
     if (!started.ok) throw new Error('unreachable');
 
-    const loadingView = toContestantView(started.state);
+    const loadingView = toContestantView(started.state, contestantId);
     expect(loadingView.queue[0]?.mediaUrls).toEqual(['https://media/img-1']);
 
     const revealed = revealMediaAnyway(started.state, hostId);
     if (!revealed.ok) throw new Error('unreachable');
-    const activeView = toContestantView(revealed.state);
+    const activeView = toContestantView(revealed.state, contestantId);
     expect(activeView.queue[0]?.mediaUrls).toEqual(['https://media/img-1']);
   });
 

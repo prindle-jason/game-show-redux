@@ -312,7 +312,7 @@ describe('JeopardyBoard', () => {
                     clue: { media: { kind: 'image', url: 'https://media/img-1.png' } },
                     answer: { text: 'What is water?' },
                   },
-                  ROUND.data.categories[0]!.clues[1],
+                  ROUND.data.categories[0]?.clues[1],
                 ],
               },
             ],

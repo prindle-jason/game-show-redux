@@ -21,7 +21,9 @@ describe('finalJeopardyActionSchema', () => {
   it.each([
     { type: 'wager', amount: 1000 },
     { type: 'submit-answer', answer: 'What is Zod?' },
-    { type: 'reveal-next' },
+    { type: 'advance' },
+    { type: 'reveal-answer' },
+    { type: 'reveal-wager' },
     { type: 'judge', playerId: 'p1', correct: false },
   ])('accepts a valid $type action', (action) => {
     expect(finalJeopardyActionSchema.safeParse(action).success).toBe(true);
@@ -31,5 +33,9 @@ describe('finalJeopardyActionSchema', () => {
     expect(finalJeopardyActionSchema.safeParse({ type: 'judge', correct: true }).success).toBe(
       false,
     );
+  });
+
+  it('rejects a negative wager', () => {
+    expect(finalJeopardyActionSchema.safeParse({ type: 'wager', amount: -1 }).success).toBe(false);
   });
 });

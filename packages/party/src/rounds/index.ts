@@ -1,4 +1,7 @@
 import type {
+  FinalJeopardyAction,
+  FinalJeopardyData,
+  FinalJeopardyState,
   JeopardyAction,
   JeopardyBoardData,
   JeopardyState,
@@ -8,6 +11,15 @@ import type {
   RoundState,
   RoundType,
 } from '@gameshow/schema';
+import type { ResolvedFinalJeopardyData } from './final-jeopardy.js';
+import {
+  createInitialFinalJeopardyState,
+  isFinalJeopardyComplete,
+  listFinalJeopardyMediaUrls,
+  reduceFinalJeopardy,
+  resolveFinalJeopardyMedia,
+  toFinalJeopardyContestantView,
+} from './final-jeopardy.js';
 import type { ResolvedJeopardyBoardData } from './jeopardy.js';
 import {
   createInitialJeopardyState,
@@ -26,7 +38,7 @@ export interface RoundModuleContext {
 export interface RoundActionContext {
   requesterId: string;
   isHost: boolean;
-  contestantIds: string[];
+  players: { id: string; name: string; score: number }[];
 }
 
 export type RoundActionResult =
@@ -47,7 +59,7 @@ export interface RoundModule {
     context: RoundActionContext,
   ): RoundActionResult;
   isComplete(state: RoundState, data: unknown): boolean;
-  toContestantView(state: RoundState, data: unknown): RoundContestantView;
+  toContestantView(state: RoundState, data: unknown, viewerId: string): RoundContestantView;
   /** Rewrites every `MediaRef` in `data` to its resolved form via `resolve`. */
   resolveMedia(data: unknown, resolve: (ref: MediaRef) => ResolvedMediaRef): unknown;
   /** Every media URL in `resolvedData`, for the pre-round prefetch barrier. */
@@ -72,5 +84,26 @@ export const roundModules: Partial<Record<RoundType, RoundModule>> = {
     resolveMedia: (data, resolve) => resolveJeopardyMedia(data as JeopardyBoardData, resolve),
     listMediaUrls: (resolvedData) =>
       listJeopardyMediaUrls(resolvedData as ResolvedJeopardyBoardData),
+  },
+  'final-jeopardy': {
+    createInitialState: (_data, context) =>
+      createInitialFinalJeopardyState(context.roundId, context.contestantIds),
+    reduce: (state, data, action, context) =>
+      reduceFinalJeopardy(
+        state as FinalJeopardyState,
+        data as FinalJeopardyData,
+        action as FinalJeopardyAction,
+        context,
+      ),
+    isComplete: (state) => isFinalJeopardyComplete(state as FinalJeopardyState),
+    toContestantView: (state, data, viewerId) =>
+      toFinalJeopardyContestantView(
+        state as FinalJeopardyState,
+        data as ResolvedFinalJeopardyData,
+        viewerId,
+      ),
+    resolveMedia: (data, resolve) => resolveFinalJeopardyMedia(data as FinalJeopardyData, resolve),
+    listMediaUrls: (resolvedData) =>
+      listFinalJeopardyMediaUrls(resolvedData as ResolvedFinalJeopardyData),
   },
 };

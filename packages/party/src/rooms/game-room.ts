@@ -195,13 +195,13 @@ export class GameRoom extends Server<Env> {
       return;
     }
 
-    const contestantIds = this.state.players
+    const players = this.state.players
       .filter((player) => player.id !== this.state.hostId)
-      .map((player) => player.id);
+      .map((player) => ({ id: player.id, name: player.name, score: player.score }));
     const result = module.reduce(activeRoundState, activeEntry.round.data, parsedAction.data, {
       requesterId: playerId,
       isHost: playerId === this.state.hostId,
-      contestantIds,
+      players,
     });
 
     if (!result.ok) {
@@ -323,7 +323,8 @@ export class GameRoom extends Server<Env> {
     for (const connection of this.getConnections<ConnectionState>()) {
       const playerId = connection.state?.playerId;
       if (!playerId) continue;
-      const view = playerId === this.state.hostId ? this.state : toContestantView(this.state);
+      const view =
+        playerId === this.state.hostId ? this.state : toContestantView(this.state, playerId);
       send(connection, { type: 'room-state', view });
     }
   }

@@ -1,5 +1,6 @@
 import type { ContestantRoomView, HostRoomView, RoundType } from '@gameshow/schema';
 import type { ComponentType } from 'react';
+import { FinalJeopardyBoard } from '../FinalJeopardyBoard.js';
 import { JeopardyBoard } from '../JeopardyBoard.js';
 
 export interface RoundBoardProps {
@@ -16,4 +17,5 @@ export interface RoundBoardProps {
  */
 export const roundBoards: Partial<Record<RoundType, ComponentType<RoundBoardProps>>> = {
   jeopardy: JeopardyBoard,
+  'final-jeopardy': FinalJeopardyBoard,
 };

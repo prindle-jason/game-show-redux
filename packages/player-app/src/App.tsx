@@ -1,6 +1,10 @@
 import { SCHEMA_PACKAGE_NAME } from '@gameshow/schema';
 import { useState } from 'react';
-import { createFixtureRound, loadFixtureMediaAssets } from './fixtures.js';
+import {
+  createFinalJeopardyFixtureRound,
+  createFixtureRound,
+  loadFixtureMediaAssets,
+} from './fixtures.js';
 import { uploadRoundMedia } from './media-upload.js';
 import { useRoomStore } from './room-store.js';
 import { roundBoards } from './rounds/index.js';
@@ -123,6 +127,14 @@ function HostControls({ phase, queueIds }: { phase: string; queueIds: string[] }
         <>
           <button type="button" disabled={uploading} onClick={() => void addFixtureRound()}>
             {uploading ? 'Uploading…' : 'Add fixture round'}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              send({ type: 'add-round-to-queue', round: createFinalJeopardyFixtureRound() })
+            }
+          >
+            Add Final Jeopardy fixture round
           </button>
           <button
             type="button"
