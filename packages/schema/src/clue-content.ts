@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ResolvedMediaRef } from './media.js';
 import { mediaRefSchema } from './media.js';
 
 /**
@@ -15,3 +16,13 @@ export const clueContentSchema = z
   });
 
 export type ClueContent = z.infer<typeof clueContentSchema>;
+
+/**
+ * The outgoing counterpart to `ClueContent` sent to clients — `media` (if
+ * present) carries a fetchable URL instead of an `assetId`. Plain TS, not
+ * zod: `party` constructs this itself once it resolves the round's media.
+ */
+export interface ResolvedClueContent {
+  text?: string;
+  media?: ResolvedMediaRef;
+}

@@ -4,7 +4,68 @@ import type {
   JeopardyClue,
   JeopardyContestantView,
   JeopardyState,
+  MediaRef,
+  ResolvedClueContent,
+  ResolvedMediaRef,
 } from '@gameshow/schema';
+
+/**
+ * `JeopardyBoardData` with every clue/answer's `MediaRef` rewritten to a
+ * `ResolvedMediaRef` — party-owned, produced once by `resolveJeopardyMedia`
+ * when a round is added to the queue (see room-logic.ts's `addRoundToQueue`).
+ */
+export interface ResolvedJeopardyBoardData {
+  categories: Array<{
+    name: string;
+    clues: Array<{
+      value: number;
+      clue: ResolvedClueContent;
+      answer: ResolvedClueContent;
+      isDailyDouble?: boolean;
+    }>;
+  }>;
+}
+
+function resolveClueContent(
+  content: JeopardyBoardData['categories'][number]['clues'][number]['clue'],
+  resolve: (ref: MediaRef) => ResolvedMediaRef,
+): ResolvedClueContent {
+  return {
+    text: content.text,
+    media: content.media ? resolve(content.media) : undefined,
+  };
+}
+
+export function resolveJeopardyMedia(
+  data: JeopardyBoardData,
+  resolve: (ref: MediaRef) => ResolvedMediaRef,
+): ResolvedJeopardyBoardData {
+  return {
+    categories: data.categories.map((category) => ({
+      name: category.name,
+      clues: category.clues.map((clue) => ({
+        value: clue.value,
+        isDailyDouble: clue.isDailyDouble,
+        clue: resolveClueContent(clue.clue, resolve),
+        answer: resolveClueContent(clue.answer, resolve),
+      })),
+    })),
+  };
+}
+
+function mediaUrls(ref: ResolvedMediaRef | undefined): string[] {
+  if (!ref) return [];
+  return ref.kind === 'slideshow' ? ref.urls : [ref.url];
+}
+
+export function listJeopardyMediaUrls(resolvedData: ResolvedJeopardyBoardData): string[] {
+  return resolvedData.categories.flatMap((category) =>
+    category.clues.flatMap((clue) => [
+      ...mediaUrls(clue.clue.media),
+      ...mediaUrls(clue.answer.media),
+    ]),
+  );
+}
 
 export type JeopardyActionResult =
   | { ok: true; state: JeopardyState; scoreDeltas?: Record<string, number> }
@@ -240,13 +301,13 @@ export function isJeopardyComplete(state: JeopardyState, data: JeopardyBoardData
 
 export function toJeopardyContestantView(
   state: JeopardyState,
-  data: JeopardyBoardData,
+  resolvedData: ResolvedJeopardyBoardData,
 ): JeopardyContestantView {
-  const activeClue = projectActiveClue(state, data);
+  const activeClue = projectActiveClue(state, resolvedData);
 
   return {
     type: 'jeopardy',
-    categories: data.categories.map((category, categoryIndex) => ({
+    categories: resolvedData.categories.map((category, categoryIndex) => ({
       name: category.name,
       clues: category.clues.map((clue, clueIndex) => ({
         value: clue.value,
@@ -263,11 +324,11 @@ export function toJeopardyContestantView(
 
 function projectActiveClue(
   state: JeopardyState,
-  data: JeopardyBoardData,
+  resolvedData: ResolvedJeopardyBoardData,
 ): JeopardyContestantView['activeClue'] {
   if (!state.activeClue) return null;
   const { categoryIndex, clueIndex } = state.activeClue;
-  const clue = findClue(data, categoryIndex, clueIndex);
+  const clue = resolvedData.categories[categoryIndex]?.clues[clueIndex];
   if (!clue) return null;
 
   return {

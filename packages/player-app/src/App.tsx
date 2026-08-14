@@ -1,6 +1,7 @@
 import { SCHEMA_PACKAGE_NAME } from '@gameshow/schema';
 import { useState } from 'react';
-import { createFixtureRound } from './fixtures.js';
+import { createFixtureRound, loadFixtureMediaAssets } from './fixtures.js';
+import { uploadRoundMedia } from './media-upload.js';
 import { useRoomStore } from './room-store.js';
 import { roundBoards } from './rounds/index.js';
 
@@ -96,16 +97,32 @@ function PlayerRow({
 
 function HostControls({ phase, queueIds }: { phase: string; queueIds: string[] }) {
   const send = useRoomStore((state) => state.send);
+  const requestMediaUploadTokens = useRoomStore((state) => state.requestMediaUploadTokens);
+  const [uploading, setUploading] = useState(false);
+
+  async function addFixtureRound() {
+    const round = createFixtureRound();
+    setUploading(true);
+    try {
+      const assets = await loadFixtureMediaAssets();
+      await uploadRoundMedia(
+        round,
+        assets,
+        requestMediaUploadTokens,
+        import.meta.env.VITE_MEDIA_BASE_URL,
+      );
+      send({ type: 'add-round-to-queue', round });
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <div>
       {phase === 'lobby' && (
         <>
-          <button
-            type="button"
-            onClick={() => send({ type: 'add-round-to-queue', round: createFixtureRound() })}
-          >
-            Add fixture round
+          <button type="button" disabled={uploading} onClick={() => void addFixtureRound()}>
+            {uploading ? 'Uploading…' : 'Add fixture round'}
           </button>
           <button
             type="button"

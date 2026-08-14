@@ -1,4 +1,12 @@
-import type { ContestantRoomView, Player, QueueEntry, RoomState, Round } from '@gameshow/schema';
+import type {
+  ContestantRoomView,
+  MediaRef,
+  Player,
+  QueueEntry,
+  ResolvedMediaRef,
+  RoomState,
+  Round,
+} from '@gameshow/schema';
 import { roundModules } from '../rounds/index.js';
 
 function contestantIds(state: RoomState): string[] {
@@ -12,6 +20,31 @@ function activeRoundStateFor(state: RoomState, entry: QueueEntry) {
     roundId: entry.round.roundId,
     contestantIds: contestantIds(state),
   });
+}
+
+/** No media to wait on means nothing to gate — go straight to `'active'`. */
+function statusForEntry(entry: QueueEntry): 'loading' | 'active' {
+  const module = roundModules[entry.round.type];
+  const mediaUrls = module?.listMediaUrls(entry.resolvedData) ?? [];
+  return mediaUrls.length > 0 ? 'loading' : 'active';
+}
+
+/** Flips the `'loading'` entry at `loadingIndex` to `'active'` once every connected player is ready. */
+function activateIfReady(
+  state: RoomState,
+  loadingIndex: number,
+  mediaReadyPlayerIds: string[],
+): RoomState {
+  const connectedIds = state.players
+    .filter((player) => player.connected)
+    .map((player) => player.id);
+  const allReady = connectedIds.every((id) => mediaReadyPlayerIds.includes(id));
+  if (!allReady) return { ...state, mediaReadyPlayerIds };
+
+  const queue = state.queue.map((entry, index) =>
+    index === loadingIndex ? { ...entry, status: 'active' as const } : entry,
+  );
+  return { ...state, mediaReadyPlayerIds, queue };
 }
 
 export function applyScoreDeltas(
@@ -33,6 +66,7 @@ export function createInitialRoomState(): RoomState {
     queue: [],
     activeRoundState: null,
     roundComplete: false,
+    mediaReadyPlayerIds: [],
   };
 }
 
@@ -69,12 +103,16 @@ export function applyJoin(state: RoomState, name: string): { state: RoomState; p
 }
 
 export function applyDisconnect(state: RoomState, playerId: string): RoomState {
-  return {
+  const next = {
     ...state,
     players: state.players.map((player) =>
       player.id === playerId ? { ...player, connected: false } : player,
     ),
   };
+
+  const loadingIndex = next.queue.findIndex((entry) => entry.status === 'loading');
+  if (loadingIndex === -1) return next;
+  return activateIfReady(next, loadingIndex, next.mediaReadyPlayerIds);
 }
 
 export type ActionResult = { ok: true; state: RoomState } | { ok: false; error: string };
@@ -86,16 +124,25 @@ function requireHost(state: RoomState, requesterId: string): string | null {
   return null;
 }
 
-export function addRoundToQueue(state: RoomState, round: Round, requesterId: string): ActionResult {
+export function addRoundToQueue(
+  state: RoomState,
+  round: Round,
+  requesterId: string,
+  resolveMediaRef: (ref: MediaRef) => ResolvedMediaRef,
+): ActionResult {
   const hostError = requireHost(state, requesterId);
   if (hostError) return { ok: false, error: hostError };
   if (state.phase !== 'lobby')
     return { ok: false, error: 'The queue can only be edited in the lobby' };
 
+  const module = roundModules[round.type];
+  const resolvedData = module ? module.resolveMedia(round.data, resolveMediaRef) : round.data;
+
   const entry: QueueEntry = {
     queueEntryId: crypto.randomUUID(),
     round,
     status: 'pending',
+    resolvedData,
   };
   return { ok: true, state: { ...state, queue: [...state.queue, entry] } };
 }
@@ -157,9 +204,8 @@ export function startGame(state: RoomState, requesterId: string): ActionResult {
     return { ok: false, error: 'Add at least one round before starting' };
 
   const firstEntry = state.queue[0];
-  const queue = state.queue.map((entry, index) =>
-    index === 0 ? { ...entry, status: 'active' as const } : entry,
-  );
+  const status = firstEntry ? statusForEntry(firstEntry) : 'active';
+  const queue = state.queue.map((entry, index) => (index === 0 ? { ...entry, status } : entry));
   return {
     ok: true,
     state: {
@@ -168,6 +214,7 @@ export function startGame(state: RoomState, requesterId: string): ActionResult {
       queue,
       activeRoundState: firstEntry ? activeRoundStateFor(state, firstEntry) : null,
       roundComplete: false,
+      mediaReadyPlayerIds: [],
     },
   };
 }
@@ -183,9 +230,10 @@ export function advanceQueue(state: RoomState, requesterId: string): ActionResul
   const nextIndex = activeIndex + 1;
   const hasNext = nextIndex < state.queue.length;
   const nextEntry = state.queue[nextIndex];
+  const nextStatus = hasNext && nextEntry ? statusForEntry(nextEntry) : undefined;
   const queue = state.queue.map((entry, index) => {
     if (index === activeIndex) return { ...entry, status: 'completed' as const };
-    if (hasNext && index === nextIndex) return { ...entry, status: 'active' as const };
+    if (hasNext && index === nextIndex && nextStatus) return { ...entry, status: nextStatus };
     return entry;
   });
 
@@ -197,8 +245,35 @@ export function advanceQueue(state: RoomState, requesterId: string): ActionResul
       queue,
       activeRoundState: hasNext && nextEntry ? activeRoundStateFor(state, nextEntry) : null,
       roundComplete: false,
+      mediaReadyPlayerIds: [],
     },
   };
+}
+
+/** A player has finished prefetching the loading entry's media; may flip it to `'active'`. */
+export function applyMediaReady(state: RoomState, playerId: string): RoomState {
+  const loadingIndex = state.queue.findIndex((entry) => entry.status === 'loading');
+  if (loadingIndex === -1) return state;
+
+  const mediaReadyPlayerIds = state.mediaReadyPlayerIds.includes(playerId)
+    ? state.mediaReadyPlayerIds
+    : [...state.mediaReadyPlayerIds, playerId];
+
+  return activateIfReady(state, loadingIndex, mediaReadyPlayerIds);
+}
+
+/** Host override: skip waiting on the rest of the room and reveal the loading entry now. */
+export function revealMediaAnyway(state: RoomState, requesterId: string): ActionResult {
+  const hostError = requireHost(state, requesterId);
+  if (hostError) return { ok: false, error: hostError };
+
+  const loadingIndex = state.queue.findIndex((entry) => entry.status === 'loading');
+  if (loadingIndex === -1) return { ok: false, error: 'No round is waiting on media' };
+
+  const queue = state.queue.map((entry, index) =>
+    index === loadingIndex ? { ...entry, status: 'active' as const } : entry,
+  );
+  return { ok: true, state: { ...state, queue } };
 }
 
 export function returnToLobby(state: RoomState, requesterId: string): ActionResult {
@@ -248,7 +323,7 @@ export function toContestantView(state: RoomState): ContestantRoomView {
   const module = activeEntry ? roundModules[activeEntry.round.type] : undefined;
   const activeRoundState =
     activeEntry && module && state.activeRoundState
-      ? module.toContestantView(state.activeRoundState, activeEntry.round.data)
+      ? module.toContestantView(state.activeRoundState, activeEntry.resolvedData)
       : null;
 
   return {
@@ -257,6 +332,10 @@ export function toContestantView(state: RoomState): ContestantRoomView {
     queue: state.queue.map((entry) => ({
       queueEntryId: entry.queueEntryId,
       status: entry.status,
+      mediaUrls:
+        entry.status === 'loading' || entry.status === 'active'
+          ? (roundModules[entry.round.type]?.listMediaUrls(entry.resolvedData) ?? [])
+          : undefined,
     })),
     activeRoundState,
     roundComplete: state.roundComplete,

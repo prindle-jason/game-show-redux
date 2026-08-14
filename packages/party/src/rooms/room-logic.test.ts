@@ -1,10 +1,11 @@
-import type { RoomState, Round } from '@gameshow/schema';
+import type { MediaRef, ResolvedMediaRef, RoomState, Round } from '@gameshow/schema';
 import { describe, expect, it } from 'vitest';
 import {
   addRoundToQueue,
   advanceQueue,
   applyDisconnect,
   applyJoin,
+  applyMediaReady,
   applyScoreDeltas,
   createInitialRoomState,
   kickPlayer,
@@ -12,6 +13,7 @@ import {
   reorderQueue,
   resetScores,
   returnToLobby,
+  revealMediaAnyway,
   startGame,
   toContestantView,
 } from './room-logic.js';
@@ -30,6 +32,39 @@ const FIXTURE_ROUND: Round = {
     ],
   },
 };
+
+/** The fixture round has no media, so this should never actually run. */
+function noopResolveMediaRef(ref: MediaRef): ResolvedMediaRef {
+  throw new Error(`unexpected media resolution for ${JSON.stringify(ref)}`);
+}
+
+const MEDIA_ROUND: Round = {
+  schemaVersion: 1,
+  roundId: 'round-media',
+  title: 'Pictures',
+  type: 'jeopardy',
+  data: {
+    categories: [
+      {
+        name: 'Pictures',
+        clues: [
+          {
+            value: 100,
+            clue: { media: { kind: 'image', assetId: 'img-1' } },
+            answer: { text: 'ans' },
+          },
+        ],
+      },
+    ],
+  },
+};
+
+function resolveByAssetId(ref: MediaRef): ResolvedMediaRef {
+  if (ref.kind === 'slideshow') {
+    return { kind: 'slideshow', urls: ref.assetIds.map((id) => `https://media/${id}`) };
+  }
+  return { kind: ref.kind, url: `https://media/${ref.assetId}` };
+}
 
 function joinRoom(state: RoomState, name: string) {
   return applyJoin(state, name);
@@ -76,35 +111,45 @@ describe('queue actions', () => {
   it('rejects add-round-to-queue from a non-host', () => {
     const { state, playerId } = hostRoom();
     const contestant = joinRoom(state, 'Sam');
-    const result = addRoundToQueue(contestant.state, FIXTURE_ROUND, contestant.playerId);
+    const result = addRoundToQueue(
+      contestant.state,
+      FIXTURE_ROUND,
+      contestant.playerId,
+      noopResolveMediaRef,
+    );
     expect(result).toEqual({ ok: false, error: expect.any(String) });
     expect(playerId).not.toBe(contestant.playerId);
   });
 
   it('lets the host add a round to the queue in lobby', () => {
     const { state, playerId } = hostRoom();
-    const result = addRoundToQueue(state, FIXTURE_ROUND, playerId);
+    const result = addRoundToQueue(state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('unreachable');
     expect(result.state.queue).toEqual([
-      { queueEntryId: expect.any(String), round: FIXTURE_ROUND, status: 'pending' },
+      {
+        queueEntryId: expect.any(String),
+        round: FIXTURE_ROUND,
+        status: 'pending',
+        resolvedData: expect.any(Object),
+      },
     ]);
   });
 
   it('rejects queue edits once the game has started', () => {
     const { state, playerId } = hostRoom();
-    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId);
+    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
     if (!withRound.ok) throw new Error('unreachable');
     const started = startGame(withRound.state, playerId);
     if (!started.ok) throw new Error('unreachable');
 
-    const result = addRoundToQueue(started.state, FIXTURE_ROUND, playerId);
+    const result = addRoundToQueue(started.state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
     expect(result).toEqual({ ok: false, error: expect.any(String) });
   });
 
   it('removes a queue entry by id', () => {
     const { state, playerId } = hostRoom();
-    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId);
+    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
     if (!withRound.ok) throw new Error('unreachable');
     const queueEntryId = withRound.state.queue[0]?.queueEntryId;
     if (!queueEntryId) throw new Error('unreachable');
@@ -117,9 +162,14 @@ describe('queue actions', () => {
 
   it('reorders queue entries given a permutation of current ids', () => {
     const { state, playerId } = hostRoom();
-    const first = addRoundToQueue(state, FIXTURE_ROUND, playerId);
+    const first = addRoundToQueue(state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
     if (!first.ok) throw new Error('unreachable');
-    const second = addRoundToQueue(first.state, { ...FIXTURE_ROUND, roundId: 'round-2' }, playerId);
+    const second = addRoundToQueue(
+      first.state,
+      { ...FIXTURE_ROUND, roundId: 'round-2' },
+      playerId,
+      noopResolveMediaRef,
+    );
     if (!second.ok) throw new Error('unreachable');
 
     const [entryA, entryB] = second.state.queue;
@@ -136,7 +186,7 @@ describe('queue actions', () => {
 
   it('rejects reorder-queue when the id list does not match the current queue', () => {
     const { state, playerId } = hostRoom();
-    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId);
+    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
     if (!withRound.ok) throw new Error('unreachable');
 
     const result = reorderQueue(withRound.state, ['not-a-real-id'], playerId);
@@ -147,7 +197,7 @@ describe('queue actions', () => {
 describe('phase transitions', () => {
   function roomWithQueuedRound() {
     const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
-    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId);
+    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
     if (!withRound.ok) throw new Error('unreachable');
     return { state: withRound.state, playerId };
   }
@@ -169,7 +219,12 @@ describe('phase transitions', () => {
 
   it('advances through the queue and ends the game once it is exhausted', () => {
     const { state, playerId } = roomWithQueuedRound();
-    const second = addRoundToQueue(state, { ...FIXTURE_ROUND, roundId: 'round-2' }, playerId);
+    const second = addRoundToQueue(
+      state,
+      { ...FIXTURE_ROUND, roundId: 'round-2' },
+      playerId,
+      noopResolveMediaRef,
+    );
     if (!second.ok) throw new Error('unreachable');
     const started = startGame(second.state, playerId);
     if (!started.ok) throw new Error('unreachable');
@@ -217,7 +272,12 @@ describe('activeRoundState', () => {
   function roomWithContestant() {
     const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
     const contestant = joinRoom(state, 'Sam');
-    const withRound = addRoundToQueue(contestant.state, FIXTURE_ROUND, playerId);
+    const withRound = addRoundToQueue(
+      contestant.state,
+      FIXTURE_ROUND,
+      playerId,
+      noopResolveMediaRef,
+    );
     if (!withRound.ok) throw new Error('unreachable');
     return { state: withRound.state, playerId, contestantId: contestant.playerId };
   }
@@ -240,7 +300,12 @@ describe('activeRoundState', () => {
 
   it('re-initializes activeRoundState for the next queue entry on advance-queue', () => {
     const { state, playerId } = roomWithContestant();
-    const second = addRoundToQueue(state, { ...FIXTURE_ROUND, roundId: 'round-2' }, playerId);
+    const second = addRoundToQueue(
+      state,
+      { ...FIXTURE_ROUND, roundId: 'round-2' },
+      playerId,
+      noopResolveMediaRef,
+    );
     if (!second.ok) throw new Error('unreachable');
     const started = startGame(second.state, playerId);
     if (!started.ok) throw new Error('unreachable');
@@ -264,7 +329,12 @@ describe('activeRoundState', () => {
 
   it('resets roundComplete on start-game and advance-queue, and shows it to contestants', () => {
     const { state, playerId } = roomWithContestant();
-    const second = addRoundToQueue(state, { ...FIXTURE_ROUND, roundId: 'round-2' }, playerId);
+    const second = addRoundToQueue(
+      state,
+      { ...FIXTURE_ROUND, roundId: 'round-2' },
+      playerId,
+      noopResolveMediaRef,
+    );
     if (!second.ok) throw new Error('unreachable');
     const started = startGame(second.state, playerId);
     if (!started.ok) throw new Error('unreachable');
@@ -300,7 +370,7 @@ describe('activeRoundState', () => {
 describe('toContestantView', () => {
   it('never exposes hostId or round content', () => {
     const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
-    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId);
+    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
     if (!withRound.ok) throw new Error('unreachable');
 
     const view = toContestantView(withRound.state);
@@ -315,7 +385,7 @@ describe('toContestantView', () => {
 describe('returnToLobby', () => {
   function endedRoom() {
     const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
-    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId);
+    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
     if (!withRound.ok) throw new Error('unreachable');
     const started = startGame(withRound.state, playerId);
     if (!started.ok) throw new Error('unreachable');
@@ -351,7 +421,7 @@ describe('returnToLobby', () => {
 describe('resetScores', () => {
   it('rejects resetting scores outside the lobby', () => {
     const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
-    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId);
+    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
     if (!withRound.ok) throw new Error('unreachable');
     const started = startGame(withRound.state, playerId);
     if (!started.ok) throw new Error('unreachable');
@@ -386,7 +456,12 @@ describe('kickPlayer', () => {
   it('rejects kicking outside the lobby', () => {
     const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
     const contestant = joinRoom(state, 'Sam');
-    const withRound = addRoundToQueue(contestant.state, FIXTURE_ROUND, playerId);
+    const withRound = addRoundToQueue(
+      contestant.state,
+      FIXTURE_ROUND,
+      playerId,
+      noopResolveMediaRef,
+    );
     if (!withRound.ok) throw new Error('unreachable');
     const started = startGame(withRound.state, playerId);
     if (!started.ok) throw new Error('unreachable');
@@ -422,5 +497,108 @@ describe('kickPlayer', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('unreachable');
     expect(result.state.players.map((player) => player.id)).toEqual([playerId]);
+  });
+});
+
+describe('media readiness barrier', () => {
+  function roomWithMediaRound() {
+    const { state: hostState, playerId: hostId } = joinRoom(createInitialRoomState(), 'Host');
+    const withContestant = joinRoom(hostState, 'Sam');
+    const withRound = addRoundToQueue(withContestant.state, MEDIA_ROUND, hostId, resolveByAssetId);
+    if (!withRound.ok) throw new Error('unreachable');
+    return { state: withRound.state, hostId, contestantId: withContestant.playerId };
+  }
+
+  it('starts a media round as loading instead of active', () => {
+    const { state, hostId } = roomWithMediaRound();
+    const started = startGame(state, hostId);
+    expect(started.ok).toBe(true);
+    if (!started.ok) throw new Error('unreachable');
+    expect(started.state.queue[0]?.status).toBe('loading');
+    expect(started.state.mediaReadyPlayerIds).toEqual([]);
+  });
+
+  it('stays loading until every connected player reports ready', () => {
+    const { state, hostId, contestantId } = roomWithMediaRound();
+    const started = startGame(state, hostId);
+    if (!started.ok) throw new Error('unreachable');
+
+    const afterHostReady = applyMediaReady(started.state, hostId);
+    expect(afterHostReady.queue[0]?.status).toBe('loading');
+    expect(afterHostReady.mediaReadyPlayerIds).toEqual([hostId]);
+
+    const afterAllReady = applyMediaReady(afterHostReady, contestantId);
+    expect(afterAllReady.queue[0]?.status).toBe('active');
+  });
+
+  it('ignores a duplicate ready report from the same player', () => {
+    const { state, hostId } = roomWithMediaRound();
+    const started = startGame(state, hostId);
+    if (!started.ok) throw new Error('unreachable');
+
+    const once = applyMediaReady(started.state, hostId);
+    const twice = applyMediaReady(once, hostId);
+    expect(twice.mediaReadyPlayerIds).toEqual([hostId]);
+  });
+
+  it('a disconnect can complete the ready set for the remaining connected players', () => {
+    const { state, hostId, contestantId } = roomWithMediaRound();
+    const started = startGame(state, hostId);
+    if (!started.ok) throw new Error('unreachable');
+
+    const afterHostReady = applyMediaReady(started.state, hostId);
+    expect(afterHostReady.queue[0]?.status).toBe('loading');
+
+    const afterDisconnect = applyDisconnect(afterHostReady, contestantId);
+    expect(afterDisconnect.queue[0]?.status).toBe('active');
+  });
+
+  it('lets the host reveal the loading entry immediately', () => {
+    const { state, hostId } = roomWithMediaRound();
+    const started = startGame(state, hostId);
+    if (!started.ok) throw new Error('unreachable');
+
+    const result = revealMediaAnyway(started.state, hostId);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.state.queue[0]?.status).toBe('active');
+  });
+
+  it('rejects reveal-media-anyway from a non-host', () => {
+    const { state, hostId, contestantId } = roomWithMediaRound();
+    const started = startGame(state, hostId);
+    if (!started.ok) throw new Error('unreachable');
+
+    const result = revealMediaAnyway(started.state, contestantId);
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('rejects reveal-media-anyway when nothing is loading', () => {
+    const { state, hostId } = roomWithMediaRound();
+    const result = revealMediaAnyway(state, hostId);
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('exposes mediaUrls to contestants for loading and active entries', () => {
+    const { state, hostId } = roomWithMediaRound();
+    const started = startGame(state, hostId);
+    if (!started.ok) throw new Error('unreachable');
+
+    const loadingView = toContestantView(started.state);
+    expect(loadingView.queue[0]?.mediaUrls).toEqual(['https://media/img-1']);
+
+    const revealed = revealMediaAnyway(started.state, hostId);
+    if (!revealed.ok) throw new Error('unreachable');
+    const activeView = toContestantView(revealed.state);
+    expect(activeView.queue[0]?.mediaUrls).toEqual(['https://media/img-1']);
+  });
+
+  it('does not gate a media-free round (regression: existing fixture goes straight to active)', () => {
+    const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
+    const withRound = addRoundToQueue(state, FIXTURE_ROUND, playerId, noopResolveMediaRef);
+    if (!withRound.ok) throw new Error('unreachable');
+    const started = startGame(withRound.state, playerId);
+    if (!started.ok) throw new Error('unreachable');
+    expect(started.state.queue[0]?.status).toBe('active');
   });
 });

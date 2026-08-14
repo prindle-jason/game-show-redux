@@ -23,6 +23,7 @@ Clues support image/audio/video, not just text.
 
 - Builder export/import is a **zip bundle** (`round.json` + `/assets`) per round, not a single JSON file — keeps media as native files and avoids base64 bloat, and keeps each round independently reusable.
 - During a live room, a round's media uploads to object storage (Cloudflare R2) when the host adds that round to the queue (not all at once at room start, since rounds are added individually); contestants' browsers fetch by URL rather than the media being relayed over the room's websocket.
+- **No one watches a clue's video/audio load while others wait.** A round doesn't become playable until every connected client has fully downloaded its media (a host-visible "waiting on…" state, with a timeout and host override so one stalled client can't block the game indefinitely). Currently accepted trade-off: because media uploads on add-to-queue, URLs are resolved and sent to contestants at that point too, well before a clue is picked — a technically-inclined contestant could inspect and view an upcoming clue's media early. See [future-enhancements.md](./future-enhancements.md).
 
 ## Rooms
 

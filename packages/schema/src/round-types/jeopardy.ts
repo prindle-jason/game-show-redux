@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ClueContent } from '../clue-content.js';
+import type { ResolvedClueContent } from '../clue-content.js';
 import { clueContentSchema } from '../clue-content.js';
 
 export const jeopardyClueSchema = z.object({
@@ -73,7 +73,7 @@ export interface JeopardyContestantView {
   activeClue: {
     categoryIndex: number;
     clueIndex: number;
-    clue: ClueContent;
+    clue: ResolvedClueContent;
     isDailyDouble: boolean;
   } | null;
   buzzedPlayerId: string | null;

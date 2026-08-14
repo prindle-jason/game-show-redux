@@ -1,7 +1,14 @@
-import type { ClientMessage, RoomState, ServerMessage } from '@gameshow/schema';
-import { clientMessageSchema, roundTypeDefinitions } from '@gameshow/schema';
+import type {
+  ClientMessage,
+  MediaRef,
+  ResolvedMediaRef,
+  RoomState,
+  ServerMessage,
+} from '@gameshow/schema';
+import { clientMessageSchema, MEDIA_LIMITS, roundTypeDefinitions } from '@gameshow/schema';
 import { type Connection, Server, type WSMessage } from 'partyserver';
 import type { Env } from '../env.js';
+import { mediaKey, signUploadToken } from '../media.js';
 import { roundModules } from '../rounds/index.js';
 import {
   type ActionResult,
@@ -9,6 +16,7 @@ import {
   advanceQueue,
   applyDisconnect,
   applyJoin,
+  applyMediaReady,
   applyScoreDeltas,
   createInitialRoomState,
   kickPlayer,
@@ -16,6 +24,7 @@ import {
   reorderQueue,
   resetScores,
   returnToLobby,
+  revealMediaAnyway,
   startGame,
   toContestantView,
 } from './room-logic.js';
@@ -24,6 +33,11 @@ interface ConnectionState {
   playerId: string;
 }
 
+/** How long a `'loading'` entry waits for every connected player before the host can be nudged. */
+const MEDIA_READY_TIMEOUT_MS = 12_000;
+/** Upload tokens are single-asset and single-use in practice; keep the signed window short. */
+const UPLOAD_TOKEN_TTL_MS = 5 * 60 * 1000;
+
 function send(connection: Connection, message: ServerMessage): void {
   connection.send(JSON.stringify(message));
 }
@@ -31,8 +45,10 @@ function send(connection: Connection, message: ServerMessage): void {
 /** One GameRoom Durable Object per live room; state is in-memory only for now. */
 export class GameRoom extends Server<Env> {
   private state: RoomState = createInitialRoomState();
+  private mediaTimeout: { queueEntryId: string; handle: ReturnType<typeof setTimeout> } | null =
+    null;
 
-  override onMessage(connection: Connection<ConnectionState>, raw: WSMessage): void {
+  override async onMessage(connection: Connection<ConnectionState>, raw: WSMessage): Promise<void> {
     let parsed: unknown;
     try {
       parsed = JSON.parse(typeof raw === 'string' ? raw : new TextDecoder().decode(raw));
@@ -47,10 +63,13 @@ export class GameRoom extends Server<Env> {
       return;
     }
 
-    this.handleMessage(connection, result.data);
+    await this.handleMessage(connection, result.data);
   }
 
-  private handleMessage(connection: Connection<ConnectionState>, message: ClientMessage): void {
+  private async handleMessage(
+    connection: Connection<ConnectionState>,
+    message: ClientMessage,
+  ): Promise<void> {
     if (message.type === 'join') {
       const { state, playerId } = applyJoin(this.state, message.name);
       this.state = state;
@@ -70,17 +89,42 @@ export class GameRoom extends Server<Env> {
       return;
     }
 
+    if (message.type === 'round-action') {
+      this.handleRoundAction(connection, playerId, message.action);
+      return;
+    }
+
+    if (message.type === 'round-media-ready') {
+      this.state = applyMediaReady(this.state, playerId);
+      this.syncMediaTimeout();
+      this.broadcastViews();
+      return;
+    }
+
+    if (message.type === 'request-media-upload-tokens') {
+      await this.handleUploadTokenRequest(connection, playerId, message);
+      return;
+    }
+
     let actionResult: ActionResult;
     switch (message.type) {
-      case 'round-action':
-        this.handleRoundAction(connection, playerId, message.action);
-        return;
-      case 'add-round-to-queue':
-        actionResult = addRoundToQueue(this.state, message.round, playerId);
+      case 'add-round-to-queue': {
+        const round = message.round;
+        actionResult = addRoundToQueue(this.state, round, playerId, (ref) =>
+          this.resolveMediaRef(round.roundId, ref),
+        );
         break;
-      case 'remove-from-queue':
+      }
+      case 'remove-from-queue': {
+        const removedEntry = this.state.queue.find(
+          (entry) => entry.queueEntryId === message.queueEntryId,
+        );
         actionResult = removeFromQueue(this.state, message.queueEntryId, playerId);
+        if (actionResult.ok && removedEntry) {
+          await this.deleteRoundMedia(removedEntry.round.roundId);
+        }
         break;
+      }
       case 'reorder-queue':
         actionResult = reorderQueue(this.state, message.queueEntryIds, playerId);
         break;
@@ -95,6 +139,9 @@ export class GameRoom extends Server<Env> {
         break;
       case 'reset-scores':
         actionResult = resetScores(this.state, playerId);
+        break;
+      case 'reveal-media-anyway':
+        actionResult = revealMediaAnyway(this.state, playerId);
         break;
       case 'kick-player':
         actionResult = kickPlayer(this.state, message.playerId, playerId);
@@ -119,6 +166,7 @@ export class GameRoom extends Server<Env> {
     }
 
     this.state = actionResult.state;
+    this.syncMediaTimeout();
     this.broadcastViews();
   }
 
@@ -170,10 +218,104 @@ export class GameRoom extends Server<Env> {
     this.broadcastViews();
   }
 
+  private async handleUploadTokenRequest(
+    connection: Connection<ConnectionState>,
+    playerId: string,
+    message: Extract<ClientMessage, { type: 'request-media-upload-tokens' }>,
+  ): Promise<void> {
+    if (playerId !== this.state.hostId) {
+      send(connection, { type: 'error', message: 'Only the host can upload media' });
+      return;
+    }
+    if (this.state.phase !== 'lobby') {
+      send(connection, { type: 'error', message: 'Media can only be uploaded in the lobby' });
+      return;
+    }
+
+    for (const asset of message.assets) {
+      const limits = MEDIA_LIMITS[asset.kind];
+      if (!limits.contentTypes.includes(asset.contentType) || asset.size > limits.maxBytes) {
+        send(connection, {
+          type: 'error',
+          message: `Asset ${asset.assetId} failed content-type/size validation`,
+        });
+        return;
+      }
+    }
+
+    const exp = Date.now() + UPLOAD_TOKEN_TTL_MS;
+    const tokens = await Promise.all(
+      message.assets.map(async (asset) => ({
+        assetId: asset.assetId,
+        token: await signUploadToken(this.env.MEDIA_UPLOAD_SECRET, {
+          roomId: this.name,
+          roundId: message.roundId,
+          assetId: asset.assetId,
+          contentType: asset.contentType,
+          maxBytes: MEDIA_LIMITS[asset.kind].maxBytes,
+          exp,
+        }),
+      })),
+    );
+
+    send(connection, { type: 'media-upload-tokens', tokens });
+  }
+
+  private resolveMediaRef(roundId: string, ref: MediaRef): ResolvedMediaRef {
+    const buildUrl = (assetId: string) =>
+      `${this.env.MEDIA_BASE_URL}/media/${mediaKey(this.name, roundId, assetId)}`;
+    if (ref.kind === 'slideshow') {
+      return { kind: 'slideshow', urls: ref.assetIds.map(buildUrl) };
+    }
+    return { kind: ref.kind, url: buildUrl(ref.assetId) };
+  }
+
+  private async deleteRoundMedia(roundId: string): Promise<void> {
+    const prefix = `rooms/${this.name}/${roundId}/`;
+    const listed = await this.env.MEDIA.list({ prefix });
+    await Promise.all(listed.objects.map((object) => this.env.MEDIA.delete(object.key)));
+  }
+
+  /**
+   * Keeps at most one timer alive, tracking whichever entry is currently
+   * `'loading'` — reconciled after every state change so a stale timer from
+   * an earlier round can never fire against a different entry.
+   */
+  private syncMediaTimeout(): void {
+    const loadingEntry = this.state.queue.find((entry) => entry.status === 'loading');
+    if (!loadingEntry) {
+      this.clearMediaTimeout();
+      return;
+    }
+    if (this.mediaTimeout?.queueEntryId === loadingEntry.queueEntryId) return;
+
+    this.clearMediaTimeout();
+    const queueEntryId = loadingEntry.queueEntryId;
+    const handle = setTimeout(() => {
+      this.mediaTimeout = null;
+      const current = this.state.queue.find((entry) => entry.queueEntryId === queueEntryId);
+      if (current?.status !== 'loading') return;
+      const result = revealMediaAnyway(this.state, this.state.hostId);
+      if (result.ok) {
+        this.state = result.state;
+        this.broadcastViews();
+      }
+    }, MEDIA_READY_TIMEOUT_MS);
+    this.mediaTimeout = { queueEntryId, handle };
+  }
+
+  private clearMediaTimeout(): void {
+    if (this.mediaTimeout) {
+      clearTimeout(this.mediaTimeout.handle);
+      this.mediaTimeout = null;
+    }
+  }
+
   override onClose(connection: Connection<ConnectionState>): void {
     const playerId = connection.state?.playerId;
     if (!playerId) return;
     this.state = applyDisconnect(this.state, playerId);
+    this.syncMediaTimeout();
     this.broadcastViews();
   }
 

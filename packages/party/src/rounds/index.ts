@@ -2,14 +2,19 @@ import type {
   JeopardyAction,
   JeopardyBoardData,
   JeopardyState,
+  MediaRef,
+  ResolvedMediaRef,
   RoundContestantView,
   RoundState,
   RoundType,
 } from '@gameshow/schema';
+import type { ResolvedJeopardyBoardData } from './jeopardy.js';
 import {
   createInitialJeopardyState,
   isJeopardyComplete,
+  listJeopardyMediaUrls,
   reduceJeopardy,
+  resolveJeopardyMedia,
   toJeopardyContestantView,
 } from './jeopardy.js';
 
@@ -43,6 +48,10 @@ export interface RoundModule {
   ): RoundActionResult;
   isComplete(state: RoundState, data: unknown): boolean;
   toContestantView(state: RoundState, data: unknown): RoundContestantView;
+  /** Rewrites every `MediaRef` in `data` to its resolved form via `resolve`. */
+  resolveMedia(data: unknown, resolve: (ref: MediaRef) => ResolvedMediaRef): unknown;
+  /** Every media URL in `resolvedData`, for the pre-round prefetch barrier. */
+  listMediaUrls(resolvedData: unknown): string[];
 }
 
 export const roundModules: Partial<Record<RoundType, RoundModule>> = {
@@ -59,6 +68,9 @@ export const roundModules: Partial<Record<RoundType, RoundModule>> = {
     isComplete: (state, data) =>
       isJeopardyComplete(state as JeopardyState, data as JeopardyBoardData),
     toContestantView: (state, data) =>
-      toJeopardyContestantView(state as JeopardyState, data as JeopardyBoardData),
+      toJeopardyContestantView(state as JeopardyState, data as ResolvedJeopardyBoardData),
+    resolveMedia: (data, resolve) => resolveJeopardyMedia(data as JeopardyBoardData, resolve),
+    listMediaUrls: (resolvedData) =>
+      listJeopardyMediaUrls(resolvedData as ResolvedJeopardyBoardData),
   },
 };

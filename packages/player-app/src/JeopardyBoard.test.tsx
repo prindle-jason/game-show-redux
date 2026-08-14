@@ -85,7 +85,7 @@ describe('JeopardyBoard', () => {
         { id: 'p1', name: 'Host', score: 0, connected: true },
         { id: 'p2', name: 'Sam', score: 0, connected: true },
       ],
-      queue: [{ queueEntryId: 'q1', round: ROUND, status: 'active' }],
+      queue: [{ queueEntryId: 'q1', round: ROUND, status: 'active', resolvedData: ROUND.data }],
       activeRoundState: {
         type: 'jeopardy',
         revealedClues: [],
@@ -149,7 +149,7 @@ describe('JeopardyBoard', () => {
         { id: 'p1', name: 'Host', score: 0, connected: true },
         { id: 'p2', name: 'Sam', score: 0, connected: true },
       ],
-      queue: [{ queueEntryId: 'q1', round: ROUND, status: 'active' }],
+      queue: [{ queueEntryId: 'q1', round: ROUND, status: 'active', resolvedData: ROUND.data }],
       activeRoundState: {
         type: 'jeopardy',
         revealedClues: [],
@@ -217,7 +217,7 @@ describe('JeopardyBoard', () => {
         { id: 'p1', name: 'Host', score: 0, connected: true },
         { id: 'p2', name: 'Sam', score: 0, connected: true },
       ],
-      queue: [{ queueEntryId: 'q1', round: ROUND, status: 'active' }],
+      queue: [{ queueEntryId: 'q1', round: ROUND, status: 'active', resolvedData: ROUND.data }],
       activeRoundState: {
         type: 'jeopardy',
         revealedClues: [],
@@ -244,7 +244,7 @@ describe('JeopardyBoard', () => {
         { id: 'p1', name: 'Host', score: 0, connected: true },
         { id: 'p2', name: 'Sam', score: 0, connected: true },
       ],
-      queue: [{ queueEntryId: 'q1', round: ROUND, status: 'active' }],
+      queue: [{ queueEntryId: 'q1', round: ROUND, status: 'active', resolvedData: ROUND.data }],
       activeRoundState: {
         type: 'jeopardy',
         revealedClues: [],
@@ -269,7 +269,7 @@ describe('JeopardyBoard', () => {
         { id: 'p1', name: 'Host', score: 0, connected: true },
         { id: 'p2', name: 'Sam', score: 200, connected: true },
       ],
-      queue: [{ queueEntryId: 'q1', round: ROUND, status: 'active' }],
+      queue: [{ queueEntryId: 'q1', round: ROUND, status: 'active', resolvedData: ROUND.data }],
       activeRoundState: {
         type: 'jeopardy',
         revealedClues: [
@@ -286,5 +286,130 @@ describe('JeopardyBoard', () => {
     });
 
     expect(await screen.findByText('Round complete')).toBeInTheDocument();
+  });
+
+  it('renders resolved media for the active clue', async () => {
+    await joinAs('Host', 'p1', true);
+    sendRoomState({
+      phase: 'playing',
+      hostId: 'p1',
+      players: [
+        { id: 'p1', name: 'Host', score: 0, connected: true },
+        { id: 'p2', name: 'Sam', score: 0, connected: true },
+      ],
+      queue: [
+        {
+          queueEntryId: 'q1',
+          round: ROUND,
+          status: 'active',
+          resolvedData: {
+            categories: [
+              {
+                name: 'Science',
+                clues: [
+                  {
+                    value: 200,
+                    clue: { media: { kind: 'image', url: 'https://media/img-1.png' } },
+                    answer: { text: 'What is water?' },
+                  },
+                  ROUND.data.categories[0]!.clues[1],
+                ],
+              },
+            ],
+          },
+        },
+      ],
+      activeRoundState: {
+        type: 'jeopardy',
+        revealedClues: [],
+        activeClue: { categoryIndex: 0, clueIndex: 0 },
+        buzzedPlayerId: null,
+        lockedOutPlayerIds: [],
+        pendingWager: null,
+        controllingPlayerId: null,
+      },
+    });
+
+    const image = await screen
+      .findByText('What is water?')
+      .then(() => document.querySelector('img'));
+    expect(image).toHaveAttribute('src', 'https://media/img-1.png');
+  });
+
+  it('gates the host on media readiness and lets them reveal anyway', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null)));
+    await joinAs('Host', 'p1', true);
+    sendRoomState({
+      phase: 'playing',
+      hostId: 'p1',
+      players: [
+        { id: 'p1', name: 'Host', score: 0, connected: true },
+        { id: 'p2', name: 'Sam', score: 0, connected: true },
+      ],
+      queue: [{ queueEntryId: 'q1', round: ROUND, status: 'loading', resolvedData: ROUND.data }],
+      activeRoundState: {
+        type: 'jeopardy',
+        revealedClues: [],
+        activeClue: null,
+        buzzedPlayerId: null,
+        lockedOutPlayerIds: [],
+        pendingWager: null,
+        controllingPlayerId: 'p2',
+      },
+      mediaReadyPlayerIds: [],
+    });
+
+    expect(await screen.findByText('Sam')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal anyway' }));
+    expect(lastSocket?.sent).toContain(JSON.stringify({ type: 'reveal-media-anyway' }));
+
+    vi.unstubAllGlobals();
+  });
+
+  it('prefetches media then reports round-media-ready as a contestant', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null));
+    vi.stubGlobal('fetch', fetchMock);
+    await joinAs('Sam', 'p2', false);
+    sendRoomState({
+      phase: 'playing',
+      players: [
+        { id: 'p1', name: 'Host', score: 0, connected: true },
+        { id: 'p2', name: 'Sam', score: 0, connected: true },
+      ],
+      queue: [
+        {
+          queueEntryId: 'q1',
+          status: 'loading',
+          mediaUrls: ['https://media/img-1.png'],
+        },
+      ],
+      activeRoundState: {
+        type: 'jeopardy',
+        categories: [
+          {
+            name: 'Science',
+            clues: [
+              { value: 200, revealed: false },
+              { value: 400, revealed: false },
+            ],
+          },
+        ],
+        activeClue: null,
+        buzzedPlayerId: null,
+        lockedOutPlayerIds: [],
+        pendingWager: null,
+        controllingPlayerId: null,
+      },
+    });
+
+    await screen.findByText('Loading media…');
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('https://media/img-1.png');
+    });
+    await vi.waitFor(() => {
+      expect(lastSocket?.sent).toContain(JSON.stringify({ type: 'round-media-ready' }));
+    });
+
+    vi.unstubAllGlobals();
   });
 });

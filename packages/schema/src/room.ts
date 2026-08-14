@@ -14,17 +14,21 @@ export interface Player {
   connected: boolean;
 }
 
-export type QueueEntryStatus = 'pending' | 'active' | 'completed';
+export type QueueEntryStatus = 'pending' | 'loading' | 'active' | 'completed';
 
 /**
  * One round the host has added to the room's queue. `round` is the full
  * authored artifact — contestants only ever see a filtered projection of
  * this (status/count), never `round.data`, until it becomes `active`.
+ * `resolvedData` is `round.data` with every `MediaRef` rewritten to a
+ * fetchable URL (see media.ts) — computed once when the round is added, and
+ * what every display path reads instead of `round.data`'s raw `assetId`s.
  */
 export interface QueueEntry {
   queueEntryId: string;
   round: Round;
   status: QueueEntryStatus;
+  resolvedData: unknown;
 }
 
 export interface RoomState {
@@ -44,6 +48,13 @@ export interface RoomState {
    * that nothing is left to play.
    */
   roundComplete: boolean;
+  /**
+   * Player ids who've reported their media prefetch is done for whichever
+   * queue entry is currently `'loading'` — reset to `[]` whenever a new entry
+   * enters `'loading'`. Once every *connected* player is in this list, the
+   * entry flips to `'active'`.
+   */
+  mediaReadyPlayerIds: string[];
 }
 
 /** What the host receives: the full, unfiltered room state. */
@@ -53,6 +64,13 @@ export type HostRoomView = RoomState;
 export interface QueueEntryView {
   queueEntryId: string;
   status: QueueEntryStatus;
+  /**
+   * Every media URL in the round, present only while this entry is
+   * `'loading'`/`'active'` — lets clients prefetch the whole round (not just
+   * revealed clues) before/while it plays. Accepted early-exposure trade-off,
+   * see future-enhancements.md; never includes clue/answer text.
+   */
+  mediaUrls?: string[];
 }
 
 /**

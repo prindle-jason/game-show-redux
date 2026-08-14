@@ -27,6 +27,20 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('reset-scores') }),
   z.object({ type: z.literal('kick-player'), playerId: z.string().min(1) }),
   z.object({ type: z.literal('round-action'), action: z.unknown() }),
+  z.object({ type: z.literal('round-media-ready') }),
+  z.object({ type: z.literal('reveal-media-anyway') }),
+  z.object({
+    type: z.literal('request-media-upload-tokens'),
+    roundId: z.string().min(1),
+    assets: z.array(
+      z.object({
+        assetId: z.string().min(1),
+        kind: z.enum(['image', 'audio', 'video', 'slideshow']),
+        contentType: z.string().min(1),
+        size: z.number().int().nonnegative(),
+      }),
+    ),
+  }),
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
@@ -39,4 +53,5 @@ export type ServerMessage =
   | { type: 'joined'; playerId: string; isHost: boolean }
   | { type: 'kicked'; reason?: string }
   | { type: 'room-state'; view: HostRoomView | ContestantRoomView }
+  | { type: 'media-upload-tokens'; tokens: Array<{ assetId: string; token: string }> }
   | { type: 'error'; message: string };

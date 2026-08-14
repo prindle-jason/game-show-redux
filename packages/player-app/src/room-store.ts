@@ -2,6 +2,7 @@ import type {
   ClientMessage,
   ContestantRoomView,
   HostRoomView,
+  MediaRef,
   ServerMessage,
 } from '@gameshow/schema';
 import { PartySocket } from 'partysocket';
@@ -17,9 +18,22 @@ interface RoomStore {
   error: string | null;
   join: (roomCode: string, name: string) => void;
   send: (message: ClientMessage) => void;
+  requestMediaUploadTokens: (
+    roundId: string,
+    assets: Array<{ assetId: string; kind: MediaRef['kind']; contentType: string; size: number }>,
+  ) => Promise<Array<{ assetId: string; token: string }>>;
 }
 
 let socket: PartySocket | null = null;
+/**
+ * The websocket protocol isn't naturally request/response — this bridges the
+ * one `request-media-upload-tokens` in flight (host uploads one round at a
+ * time) back to a promise the caller can await.
+ */
+let pendingUploadTokenRequest: {
+  resolve: (tokens: Array<{ assetId: string; token: string }>) => void;
+  reject: (error: Error) => void;
+} | null = null;
 
 export const useRoomStore = create<RoomStore>((set, get) => ({
   status: 'idle',
@@ -58,7 +72,12 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
           view: null,
           error: message.reason ?? null,
         });
+      } else if (message.type === 'media-upload-tokens') {
+        pendingUploadTokenRequest?.resolve(message.tokens);
+        pendingUploadTokenRequest = null;
       } else {
+        pendingUploadTokenRequest?.reject(new Error(message.message));
+        pendingUploadTokenRequest = null;
         set({ error: message.message });
       }
     });
@@ -67,5 +86,11 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   },
   send: (message) => {
     socket?.send(JSON.stringify(message));
+  },
+  requestMediaUploadTokens: (roundId, assets) => {
+    return new Promise((resolve, reject) => {
+      pendingUploadTokenRequest = { resolve, reject };
+      get().send({ type: 'request-media-upload-tokens', roundId, assets });
+    });
   },
 }));

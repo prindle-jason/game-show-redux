@@ -13,3 +13,38 @@ export const mediaRefSchema = z.discriminatedUnion('kind', [
 ]);
 
 export type MediaRef = z.infer<typeof mediaRefSchema>;
+
+/**
+ * The outgoing counterpart to `MediaRef` — plain TS, not zod, since `party`
+ * constructs this itself (see room.ts's precedent) once it resolves an
+ * `assetId` to a fetchable R2 URL.
+ */
+export type ResolvedMediaRef =
+  | { kind: 'image'; url: string }
+  | { kind: 'audio'; url: string }
+  | { kind: 'video'; url: string }
+  | { kind: 'slideshow'; urls: string[] };
+
+/**
+ * Per-kind upload validation, shared by `party` (server-side enforcement) and
+ * `player-app` (client-side pre-check before requesting an upload token).
+ */
+export const MEDIA_LIMITS: Record<MediaRef['kind'], { contentTypes: string[]; maxBytes: number }> =
+  {
+    image: {
+      contentTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+      maxBytes: 5 * 1024 * 1024,
+    },
+    audio: {
+      contentTypes: ['audio/mpeg', 'audio/ogg', 'audio/wav'],
+      maxBytes: 15 * 1024 * 1024,
+    },
+    video: {
+      contentTypes: ['video/mp4', 'video/webm'],
+      maxBytes: 50 * 1024 * 1024,
+    },
+    slideshow: {
+      contentTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+      maxBytes: 5 * 1024 * 1024,
+    },
+  };

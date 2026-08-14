@@ -1,9 +1,11 @@
-import type { JeopardyBoardData } from '@gameshow/schema';
+import type { JeopardyBoardData, MediaRef, ResolvedMediaRef } from '@gameshow/schema';
 import { describe, expect, it } from 'vitest';
 import {
   createInitialJeopardyState,
   isJeopardyComplete,
+  listJeopardyMediaUrls,
   reduceJeopardy,
+  resolveJeopardyMedia,
   toJeopardyContestantView,
 } from './jeopardy.js';
 
@@ -22,6 +24,13 @@ const BOARD: JeopardyBoardData = {
     },
   ],
 };
+
+/** BOARD has no media, so this should never actually run. */
+function noopResolveMediaRef(ref: MediaRef): ResolvedMediaRef {
+  throw new Error(`unexpected media resolution for ${JSON.stringify(ref)}`);
+}
+
+const RESOLVED_BOARD = resolveJeopardyMedia(BOARD, noopResolveMediaRef);
 
 const CONTESTANT_IDS = ['p1', 'p2'];
 const HOST_CTX = { requesterId: 'host', isHost: true, contestantIds: CONTESTANT_IDS };
@@ -380,7 +389,7 @@ describe('isJeopardyComplete', () => {
 describe('toJeopardyContestantView', () => {
   it('hides answers and unrevealed daily-double flags, reveals only the active clue', () => {
     const state = { ...initialState(), activeClue: { categoryIndex: 0, clueIndex: 1 } };
-    const view = toJeopardyContestantView(state, BOARD);
+    const view = toJeopardyContestantView(state, RESOLVED_BOARD);
     expect(view.type).toBe('jeopardy');
     expect(view.categories[0]?.clues).toEqual([
       { value: 100, revealed: false },
@@ -392,5 +401,63 @@ describe('toJeopardyContestantView', () => {
       clue: { text: 'a2' },
       isDailyDouble: true,
     });
+  });
+});
+
+describe('resolveJeopardyMedia / listJeopardyMediaUrls', () => {
+  const BOARD_WITH_MEDIA: JeopardyBoardData = {
+    categories: [
+      {
+        name: 'A',
+        clues: [
+          {
+            value: 100,
+            clue: { text: 'a1', media: { kind: 'image', assetId: 'img-1' } },
+            answer: { text: 'ans a1', media: { kind: 'audio', assetId: 'aud-1' } },
+          },
+          {
+            value: 200,
+            clue: { media: { kind: 'slideshow', assetIds: ['slide-1', 'slide-2'] } },
+            answer: { text: 'ans a2' },
+          },
+        ],
+      },
+    ],
+  };
+
+  function resolveByAssetId(ref: MediaRef): ResolvedMediaRef {
+    if (ref.kind === 'slideshow') {
+      return { kind: 'slideshow', urls: ref.assetIds.map((id) => `https://media/${id}`) };
+    }
+    return { kind: ref.kind, url: `https://media/${ref.assetId}` };
+  }
+
+  it('rewrites every MediaRef to a ResolvedMediaRef, leaving text untouched', () => {
+    const resolved = resolveJeopardyMedia(BOARD_WITH_MEDIA, resolveByAssetId);
+    expect(resolved.categories[0]?.clues[0]?.clue).toEqual({
+      text: 'a1',
+      media: { kind: 'image', url: 'https://media/img-1' },
+    });
+    expect(resolved.categories[0]?.clues[0]?.answer).toEqual({
+      text: 'ans a1',
+      media: { kind: 'audio', url: 'https://media/aud-1' },
+    });
+    expect(resolved.categories[0]?.clues[1]?.clue).toEqual({
+      media: { kind: 'slideshow', urls: ['https://media/slide-1', 'https://media/slide-2'] },
+    });
+  });
+
+  it('lists every media URL across clues and answers', () => {
+    const resolved = resolveJeopardyMedia(BOARD_WITH_MEDIA, resolveByAssetId);
+    expect(listJeopardyMediaUrls(resolved)).toEqual([
+      'https://media/img-1',
+      'https://media/aud-1',
+      'https://media/slide-1',
+      'https://media/slide-2',
+    ]);
+  });
+
+  it('lists no URLs for a media-free board', () => {
+    expect(listJeopardyMediaUrls(RESOLVED_BOARD)).toEqual([]);
   });
 });

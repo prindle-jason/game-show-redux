@@ -17,6 +17,12 @@
       "bucket_name": "gameshow-media"
     }
   ],
+  // MEDIA_BASE_URL / MEDIA_UPLOAD_SECRET are deliberately NOT declared as
+  // `vars` here — a plaintext `vars` entry is redeployed verbatim every time
+  // and silently overwrites any same-named `wrangler secret put` value in
+  // production. Local dev supplies both via `.dev.vars` (gitignored, read
+  // automatically by `wrangler dev` and vitest-pool-workers); production
+  // supplies both via `wrangler secret put`.
   "migrations": [
     {
       "tag": "v1",
