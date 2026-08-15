@@ -74,6 +74,7 @@ export function createInitialFinalJeopardyState(
     revealOrder: [],
     revealIndex: 0,
     revealStage: 'hidden',
+    clueSlideIndex: 0,
   };
 }
 
@@ -107,7 +108,7 @@ function autoSkipNoShows(state: FinalJeopardyState): FinalJeopardyState {
 
 export function reduceFinalJeopardy(
   state: FinalJeopardyState,
-  _data: FinalJeopardyData,
+  data: FinalJeopardyData,
   action: FinalJeopardyAction,
   context: FinalJeopardyActionContext,
 ): FinalJeopardyActionResult {
@@ -124,6 +125,8 @@ export function reduceFinalJeopardy(
       return revealWager(state, context);
     case 'judge':
       return judge(state, action, context);
+    case 'set-slide':
+      return setSlide(state, data, action, context);
   }
 }
 
@@ -167,7 +170,7 @@ function advance(
     return { ok: true, state: { ...state, phase: 'wagering' } };
   }
   if (state.phase === 'wagering') {
-    return { ok: true, state: { ...state, phase: 'answering' } };
+    return { ok: true, state: { ...state, phase: 'answering', clueSlideIndex: 0 } };
   }
   if (state.phase === 'answering') {
     const revealOrder = [...state.contestantIds].sort((a, b) => {
@@ -243,6 +246,24 @@ export function isFinalJeopardyComplete(state: FinalJeopardyState): boolean {
   return state.phase === 'summary';
 }
 
+function setSlide(
+  state: FinalJeopardyState,
+  data: FinalJeopardyData,
+  action: Extract<FinalJeopardyAction, { type: 'set-slide' }>,
+  context: FinalJeopardyActionContext,
+): FinalJeopardyActionResult {
+  if (!context.isHost) return { ok: false, error: 'Only the host can control the slideshow' };
+  if (state.phase === 'category' || state.phase === 'wagering') {
+    return { ok: false, error: 'The clue is not visible yet' };
+  }
+  if (data.clue.media?.kind !== 'slideshow')
+    return { ok: false, error: 'The clue has no slideshow' };
+  if (action.index >= data.clue.media.assetIds.length) {
+    return { ok: false, error: 'Slide index out of range' };
+  }
+  return { ok: true, state: { ...state, clueSlideIndex: action.index } };
+}
+
 export function toFinalJeopardyContestantView(
   state: FinalJeopardyState,
   resolvedData: ResolvedFinalJeopardyData,
@@ -277,6 +298,7 @@ export function toFinalJeopardyContestantView(
     phase: state.phase,
     category: resolvedData.category,
     clue: state.phase === 'category' || state.phase === 'wagering' ? null : resolvedData.clue,
+    clueSlideIndex: state.clueSlideIndex,
     hasWagered: state.wagers[viewerId] !== undefined,
     hasAnswered: state.answers[viewerId] !== undefined,
     current: currentPlayerId ? { playerId: currentPlayerId, stage: state.revealStage } : null,

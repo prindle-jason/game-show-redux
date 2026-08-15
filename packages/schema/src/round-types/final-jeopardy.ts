@@ -22,6 +22,7 @@ export const finalJeopardyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('reveal-answer') }),
   z.object({ type: z.literal('reveal-wager') }),
   z.object({ type: z.literal('judge'), playerId: z.string(), correct: z.boolean() }),
+  z.object({ type: z.literal('set-slide'), index: z.number().int().nonnegative() }),
 ]);
 
 export type FinalJeopardyAction = z.infer<typeof finalJeopardyActionSchema>;
@@ -36,7 +37,10 @@ export type RevealStage = 'hidden' | 'answer' | 'wager' | 'judged';
  * ever constructed by `party`). `contestantIds` is the fixed set of players
  * in this round, captured at creation so late joiners/leavers don't shift
  * wagering or the reveal walk mid-round. `revealOrder` is computed once,
- * ascending by score, when `phase` becomes `revealing`.
+ * ascending by score, when `phase` becomes `revealing`. `clueSlideIndex` is
+ * the host's current position in the clue's slideshow (if any) — the only
+ * source of truth for which slide contestants see, since a slideshow's own
+ * position is otherwise pure client state (see `set-slide`).
  */
 export interface FinalJeopardyState {
   type: 'final-jeopardy';
@@ -48,6 +52,7 @@ export interface FinalJeopardyState {
   revealOrder: string[];
   revealIndex: number;
   revealStage: RevealStage;
+  clueSlideIndex: number;
 }
 
 /**
@@ -63,6 +68,7 @@ export interface FinalJeopardyContestantView {
   phase: FinalJeopardyPhase;
   category: string;
   clue: ResolvedClueContent | null;
+  clueSlideIndex: number;
   hasWagered: boolean;
   hasAnswered: boolean;
   current: { playerId: string; stage: RevealStage } | null;

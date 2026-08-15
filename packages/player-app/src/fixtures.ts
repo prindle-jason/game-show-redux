@@ -53,6 +53,16 @@ export function createFixtureRound(): Round {
               clue: { media: { kind: 'video', assetId: 'fixture-video' } },
               answer: { text: 'What is prndddl?' },
             },
+            {
+              value: 800,
+              clue: {
+                media: {
+                  kind: 'slideshow',
+                  assetIds: ['fixture-slide-1', 'fixture-slide-2', 'fixture-slide-3'],
+                },
+              },
+              answer: { text: 'What is a fruit salad?' },
+            },
           ],
         },
       ],
@@ -72,7 +82,13 @@ export function createFinalJeopardyFixtureRound(): Round {
     type: 'final-jeopardy',
     data: {
       category: 'World Capitals',
-      clue: { text: 'This African capital sits at the highest elevation of any national capital' },
+      clue: {
+        text: 'This African capital sits at the highest elevation of any national capital',
+        media: {
+          kind: 'slideshow',
+          assetIds: ['fixture-fj-slide-1', 'fixture-fj-slide-2', 'fixture-fj-slide-3'],
+        },
+      },
       answer: { text: 'What is Addis Ababa?' },
     },
   };
@@ -118,14 +134,37 @@ async function fetchAsBlob(url: string): Promise<Blob> {
  * rather than bundled, since `uploadRoundMedia` needs real `Blob`s to upload.
  */
 export async function loadFixtureMediaAssets(): Promise<RoundMediaAsset[]> {
-  const [image, audio, video] = await Promise.all([
+  const [image, audio, video, slide1, slide2, slide3] = await Promise.all([
     fetchAsBlob('/fixtures/alttp-link.png'),
     fetchAsBlob('/fixtures/ssbm-success.mp3'),
     fetchAsBlob('/fixtures/prndddl.mp4'),
+    fetchAsBlob('/fixtures/fruit1.webp'),
+    fetchAsBlob('/fixtures/fruit2.webp'),
+    fetchAsBlob('/fixtures/fruit3.webp'),
   ]);
   return [
     { assetId: 'fixture-image', kind: 'image', blob: image },
     { assetId: 'fixture-audio', kind: 'audio', blob: audio },
     { assetId: 'fixture-video', kind: 'video', blob: video },
+    { assetId: 'fixture-slide-1', kind: 'image', blob: slide1 },
+    { assetId: 'fixture-slide-2', kind: 'image', blob: slide2 },
+    { assetId: 'fixture-slide-3', kind: 'image', blob: slide3 },
+  ];
+}
+
+/**
+ * Loads the media referenced by `createFinalJeopardyFixtureRound()`'s clue
+ * slideshow, same lazy-fetch approach as `loadFixtureMediaAssets`.
+ */
+export async function loadFinalJeopardyFixtureMediaAssets(): Promise<RoundMediaAsset[]> {
+  const [slide1, slide2, slide3] = await Promise.all([
+    fetchAsBlob('/fixtures/fruit1.webp'),
+    fetchAsBlob('/fixtures/fruit2.webp'),
+    fetchAsBlob('/fixtures/fruit3.webp'),
+  ]);
+  return [
+    { assetId: 'fixture-fj-slide-1', kind: 'image', blob: slide1 },
+    { assetId: 'fixture-fj-slide-2', kind: 'image', blob: slide2 },
+    { assetId: 'fixture-fj-slide-3', kind: 'image', blob: slide3 },
   ];
 }

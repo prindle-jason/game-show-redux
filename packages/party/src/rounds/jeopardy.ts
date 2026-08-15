@@ -102,6 +102,7 @@ export function createInitialJeopardyState(
       contestantIds.length > 0
         ? (contestantIds[hashString(roundId) % contestantIds.length] ?? null)
         : null,
+    clueSlideIndex: 0,
   };
 }
 
@@ -136,6 +137,8 @@ export function reduceJeopardy(
       return judge(state, data, action, context);
     case 'skip-clue':
       return skipClue(state, context);
+    case 'set-slide':
+      return setSlide(state, data, action, context);
   }
 }
 
@@ -156,11 +159,17 @@ function pickClue(
 
   const activeClue = { categoryIndex: action.categoryIndex, clueIndex: action.clueIndex };
   if (clue.isDailyDouble) {
-    return { ok: true, state: { ...state, activeClue } };
+    return { ok: true, state: { ...state, activeClue, clueSlideIndex: 0 } };
   }
   return {
     ok: true,
-    state: { ...state, activeClue, buzzedPlayerId: null, lockedOutPlayerIds: [] },
+    state: {
+      ...state,
+      activeClue,
+      buzzedPlayerId: null,
+      lockedOutPlayerIds: [],
+      clueSlideIndex: 0,
+    },
   };
 }
 
@@ -299,6 +308,24 @@ export function isJeopardyComplete(state: JeopardyState, data: JeopardyBoardData
   return state.revealedClues.length >= total;
 }
 
+function setSlide(
+  state: JeopardyState,
+  data: JeopardyBoardData,
+  action: Extract<JeopardyAction, { type: 'set-slide' }>,
+  context: JeopardyActionContext,
+): JeopardyActionResult {
+  if (!context.isHost) return { ok: false, error: 'Only the host can control the slideshow' };
+  if (!state.activeClue) return { ok: false, error: 'No active clue' };
+  const clue = findClue(data, state.activeClue.categoryIndex, state.activeClue.clueIndex);
+  if (clue?.clue.media?.kind !== 'slideshow') {
+    return { ok: false, error: 'The active clue has no slideshow' };
+  }
+  if (action.index >= clue.clue.media.assetIds.length) {
+    return { ok: false, error: 'Slide index out of range' };
+  }
+  return { ok: true, state: { ...state, clueSlideIndex: action.index } };
+}
+
 export function toJeopardyContestantView(
   state: JeopardyState,
   resolvedData: ResolvedJeopardyBoardData,
@@ -335,6 +362,7 @@ function projectActiveClue(
     categoryIndex,
     clueIndex,
     clue: clue.clue,
+    clueSlideIndex: state.clueSlideIndex,
     isDailyDouble: clue.isDailyDouble ?? false,
   };
 }

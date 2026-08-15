@@ -4,6 +4,7 @@ import {
   createFinalJeopardyFixtureRound,
   createFixtureRound,
   createWheelFixtureRound,
+  loadFinalJeopardyFixtureMediaAssets,
   loadFixtureMediaAssets,
 } from './fixtures.js';
 import { uploadRoundMedia } from './media-upload.js';
@@ -122,6 +123,23 @@ function HostControls({ phase, queueIds }: { phase: string; queueIds: string[] }
     }
   }
 
+  async function addFinalJeopardyFixtureRound() {
+    const round = createFinalJeopardyFixtureRound();
+    setUploading(true);
+    try {
+      const assets = await loadFinalJeopardyFixtureMediaAssets();
+      await uploadRoundMedia(
+        round,
+        assets,
+        requestMediaUploadTokens,
+        import.meta.env.VITE_MEDIA_BASE_URL,
+      );
+      send({ type: 'add-round-to-queue', round });
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div>
       {phase === 'lobby' && (
@@ -131,11 +149,10 @@ function HostControls({ phase, queueIds }: { phase: string; queueIds: string[] }
           </button>
           <button
             type="button"
-            onClick={() =>
-              send({ type: 'add-round-to-queue', round: createFinalJeopardyFixtureRound() })
-            }
+            disabled={uploading}
+            onClick={() => void addFinalJeopardyFixtureRound()}
           >
-            Add Final Jeopardy fixture round
+            {uploading ? 'Uploading…' : 'Add Final Jeopardy fixture round'}
           </button>
           <button
             type="button"

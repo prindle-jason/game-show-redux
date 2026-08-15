@@ -1,4 +1,4 @@
-import type { MediaRef, ResolvedMediaRef } from '@gameshow/schema';
+import type { FinalJeopardyData, MediaRef, ResolvedMediaRef } from '@gameshow/schema';
 import { describe, expect, it } from 'vitest';
 import {
   createInitialFinalJeopardyState,
@@ -9,7 +9,7 @@ import {
   toFinalJeopardyContestantView,
 } from './final-jeopardy.js';
 
-const DATA = {
+const DATA: FinalJeopardyData = {
   category: 'History',
   clue: { text: 'Signed in 1776' },
   answer: { text: 'What is the Declaration of Independence?' },
@@ -20,6 +20,14 @@ function noopResolveMediaRef(ref: MediaRef): ResolvedMediaRef {
 }
 
 const RESOLVED_DATA = resolveFinalJeopardyMedia(DATA, noopResolveMediaRef);
+
+const SLIDESHOW_DATA: FinalJeopardyData = {
+  category: 'History',
+  clue: {
+    media: { kind: 'slideshow', assetIds: ['a', 'b', 'c'] },
+  },
+  answer: { text: 'What is the Declaration of Independence?' },
+};
 
 const CONTESTANT_IDS = ['p1', 'p2', 'p3'];
 
@@ -90,6 +98,85 @@ describe('phase progression', () => {
     const revealing = reduceFinalJeopardy(answering.state, DATA, { type: 'advance' }, noOneCtx);
     if (!revealing.ok) throw new Error('unreachable');
     expect(revealing.state.phase).toBe('summary');
+  });
+});
+
+describe('set-slide', () => {
+  function inAnswering(data: FinalJeopardyData = SLIDESHOW_DATA) {
+    const wagering = reduceFinalJeopardy(initialState(), data, { type: 'advance' }, HOST_CTX());
+    if (!wagering.ok) throw new Error('unreachable');
+    const answering = reduceFinalJeopardy(wagering.state, data, { type: 'advance' }, HOST_CTX());
+    if (!answering.ok) throw new Error('unreachable');
+    return answering.state;
+  }
+
+  it('lets the host move to a valid slide index', () => {
+    const result = reduceFinalJeopardy(
+      inAnswering(),
+      SLIDESHOW_DATA,
+      { type: 'set-slide', index: 2 },
+      HOST_CTX(),
+    );
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.state.clueSlideIndex).toBe(2);
+  });
+
+  it('rejects a non-host', () => {
+    const result = reduceFinalJeopardy(
+      inAnswering(),
+      SLIDESHOW_DATA,
+      { type: 'set-slide', index: 1 },
+      ctxFor('p1'),
+    );
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('rejects an out-of-range index', () => {
+    const result = reduceFinalJeopardy(
+      inAnswering(),
+      SLIDESHOW_DATA,
+      { type: 'set-slide', index: 3 },
+      HOST_CTX(),
+    );
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('rejects when the clue has no slideshow', () => {
+    const result = reduceFinalJeopardy(
+      inAnswering(DATA),
+      DATA,
+      { type: 'set-slide', index: 0 },
+      HOST_CTX(),
+    );
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('rejects before the clue is visible', () => {
+    const result = reduceFinalJeopardy(
+      initialState(),
+      SLIDESHOW_DATA,
+      { type: 'set-slide', index: 0 },
+      HOST_CTX(),
+    );
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('resets to 0 when a new clue is revealed', () => {
+    const wagering = reduceFinalJeopardy(
+      initialState(),
+      SLIDESHOW_DATA,
+      { type: 'advance' },
+      HOST_CTX(),
+    );
+    if (!wagering.ok) throw new Error('unreachable');
+    const answering = reduceFinalJeopardy(
+      wagering.state,
+      SLIDESHOW_DATA,
+      { type: 'advance' },
+      HOST_CTX(),
+    );
+    if (!answering.ok) throw new Error('unreachable');
+    expect(answering.state.clueSlideIndex).toBe(0);
   });
 });
 

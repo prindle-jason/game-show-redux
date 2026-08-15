@@ -6,9 +6,9 @@ import type {
   HostRoomView,
   QueueEntryStatus,
   ResolvedClueContent,
-  ResolvedMediaRef,
 } from '@gameshow/schema';
 import { useEffect, useRef, useState } from 'react';
+import { ClueContentView, mediaUrlsFor } from './clue-content.js';
 import { useRoomStore } from './room-store.js';
 
 /**
@@ -23,58 +23,8 @@ interface ResolvedFinalJeopardyData {
   answer: ResolvedClueContent;
 }
 
-function mediaUrlsFor(ref: ResolvedMediaRef | undefined): string[] {
-  if (!ref) return [];
-  return ref.kind === 'slideshow' ? ref.urls : [ref.url];
-}
-
 function finalJeopardyMediaUrls(data: ResolvedFinalJeopardyData): string[] {
   return [...mediaUrlsFor(data.clue.media), ...mediaUrlsFor(data.answer.media)];
-}
-
-function Slideshow({ urls }: { urls: string[] }) {
-  const [index, setIndex] = useState(0);
-  const url = urls[index];
-
-  return (
-    <div>
-      {url && <img src={url} alt="" />}
-      <button type="button" disabled={index === 0} onClick={() => setIndex((i) => i - 1)}>
-        Previous
-      </button>
-      <button
-        type="button"
-        disabled={index === urls.length - 1}
-        onClick={() => setIndex((i) => i + 1)}
-      >
-        Next
-      </button>
-    </div>
-  );
-}
-
-function MediaRenderer({ media }: { media: ResolvedMediaRef }) {
-  switch (media.kind) {
-    case 'image':
-      return <img src={media.url} alt="" />;
-    case 'audio':
-      // biome-ignore lint/a11y/useMediaCaption: uploaded media has no caption track
-      return <audio controls src={media.url} />;
-    case 'video':
-      // biome-ignore lint/a11y/useMediaCaption: uploaded media has no caption track
-      return <video controls src={media.url} />;
-    case 'slideshow':
-      return <Slideshow urls={media.urls} />;
-  }
-}
-
-function ClueContentView({ content }: { content: ResolvedClueContent }) {
-  return (
-    <>
-      {content.text && <span>{content.text}</span>}
-      {content.media && <MediaRenderer media={content.media} />}
-    </>
-  );
 }
 
 /** Same prefetch-then-report pattern as `JeopardyBoard`'s `useMediaReadyGate`. */
@@ -181,7 +131,14 @@ function HostFinalJeopardyBoard({ view }: { view: HostRoomView }) {
       {state.phase === 'answering' && (
         <div>
           <p>
-            Clue: <ClueContentView content={resolvedData.clue} />
+            Clue:{' '}
+            <ClueContentView
+              content={resolvedData.clue}
+              slideIndex={state.clueSlideIndex}
+              onSlideNavigate={(index) =>
+                send({ type: 'round-action', action: { type: 'set-slide', index } })
+              }
+            />
           </p>
           <p>
             Correct answer: <ClueContentView content={resolvedData.answer} />
@@ -351,7 +308,8 @@ function ContestantFinalJeopardyBoard({
       {roundState.phase === 'answering' && roundState.clue && (
         <div>
           <p>
-            Clue: <ClueContentView content={roundState.clue} />
+            Clue:{' '}
+            <ClueContentView content={roundState.clue} slideIndex={roundState.clueSlideIndex} />
           </p>
           {roundState.hasAnswered ? (
             <p>Answer submitted. Waiting for other contestants…</p>

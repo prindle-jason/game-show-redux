@@ -6,9 +6,9 @@ import type {
   JeopardyContestantView,
   QueueEntryStatus,
   ResolvedClueContent,
-  ResolvedMediaRef,
 } from '@gameshow/schema';
 import { useEffect, useRef, useState } from 'react';
+import { ClueContentView, mediaUrlsFor } from './clue-content.js';
 import { useRoomStore } from './room-store.js';
 
 /**
@@ -30,62 +30,12 @@ interface ResolvedJeopardyBoardData {
   }>;
 }
 
-function mediaUrlsFor(ref: ResolvedMediaRef | undefined): string[] {
-  if (!ref) return [];
-  return ref.kind === 'slideshow' ? ref.urls : [ref.url];
-}
-
 function jeopardyMediaUrls(data: ResolvedJeopardyBoardData): string[] {
   return data.categories.flatMap((category) =>
     category.clues.flatMap((clue) => [
       ...mediaUrlsFor(clue.clue.media),
       ...mediaUrlsFor(clue.answer.media),
     ]),
-  );
-}
-
-function Slideshow({ urls }: { urls: string[] }) {
-  const [index, setIndex] = useState(0);
-  const url = urls[index];
-
-  return (
-    <div>
-      {url && <img src={url} alt="" />}
-      <button type="button" disabled={index === 0} onClick={() => setIndex((i) => i - 1)}>
-        Previous
-      </button>
-      <button
-        type="button"
-        disabled={index === urls.length - 1}
-        onClick={() => setIndex((i) => i + 1)}
-      >
-        Next
-      </button>
-    </div>
-  );
-}
-
-function MediaRenderer({ media }: { media: ResolvedMediaRef }) {
-  switch (media.kind) {
-    case 'image':
-      return <img src={media.url} alt="" />;
-    case 'audio':
-      // biome-ignore lint/a11y/useMediaCaption: uploaded media has no caption track
-      return <audio controls src={media.url} />;
-    case 'video':
-      // biome-ignore lint/a11y/useMediaCaption: uploaded media has no caption track
-      return <video controls src={media.url} />;
-    case 'slideshow':
-      return <Slideshow urls={media.urls} />;
-  }
-}
-
-function ClueContentView({ content }: { content: ResolvedClueContent }) {
-  return (
-    <>
-      {content.text && <span>{content.text}</span>}
-      {content.media && <MediaRenderer media={content.media} />}
-    </>
   );
 }
 
@@ -226,7 +176,14 @@ function HostJeopardyBoard({ view }: { view: HostRoomView }) {
       {activeClue && state.activeClue && (
         <div>
           <p>
-            Clue: <ClueContentView content={activeClue.clue} />
+            Clue:{' '}
+            <ClueContentView
+              content={activeClue.clue}
+              slideIndex={state.clueSlideIndex}
+              onSlideNavigate={(index) =>
+                send({ type: 'round-action', action: { type: 'set-slide', index } })
+              }
+            />
           </p>
           <p>
             Answer: <ClueContentView content={activeClue.answer} />
@@ -338,7 +295,11 @@ function ContestantJeopardyBoard({
       {roundState.activeClue && (
         <div>
           <p>
-            Clue: <ClueContentView content={roundState.activeClue.clue} />
+            Clue:{' '}
+            <ClueContentView
+              content={roundState.activeClue.clue}
+              slideIndex={roundState.activeClue.clueSlideIndex}
+            />
           </p>
           {isLockedOut && <p>You're locked out of this clue.</p>}
           {canBuzz && (

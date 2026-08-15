@@ -38,6 +38,7 @@ export const jeopardyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('buzz') }),
   z.object({ type: z.literal('judge'), correct: z.boolean() }),
   z.object({ type: z.literal('skip-clue') }),
+  z.object({ type: z.literal('set-slide'), index: z.number().int().nonnegative() }),
 ]);
 
 export type JeopardyAction = z.infer<typeof jeopardyActionSchema>;
@@ -48,6 +49,10 @@ export type JeopardyAction = z.infer<typeof jeopardyActionSchema>;
  * submitted before its clue is revealed. `controllingPlayerId` is the only
  * player allowed to wager on a Daily Double — it's seeded deterministically
  * from the round at creation time and updated to whoever answers correctly.
+ * `clueSlideIndex` is the host's current position in the active clue's
+ * slideshow (if any) — the only source of truth for which slide contestants
+ * see, since a slideshow's own position is otherwise pure client state (see
+ * `set-slide`); reset whenever a new clue becomes active.
  */
 export interface JeopardyState {
   type: 'jeopardy';
@@ -57,6 +62,7 @@ export interface JeopardyState {
   lockedOutPlayerIds: string[];
   pendingWager: number | null;
   controllingPlayerId: string | null;
+  clueSlideIndex: number;
 }
 
 /**
@@ -74,6 +80,7 @@ export interface JeopardyContestantView {
     categoryIndex: number;
     clueIndex: number;
     clue: ResolvedClueContent;
+    clueSlideIndex: number;
     isDailyDouble: boolean;
   } | null;
   buzzedPlayerId: string | null;

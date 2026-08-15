@@ -32,6 +32,21 @@ function noopResolveMediaRef(ref: MediaRef): ResolvedMediaRef {
 
 const RESOLVED_BOARD = resolveJeopardyMedia(BOARD, noopResolveMediaRef);
 
+const BOARD_WITH_SLIDESHOW: JeopardyBoardData = {
+  categories: [
+    {
+      name: 'A',
+      clues: [
+        {
+          value: 100,
+          clue: { media: { kind: 'slideshow', assetIds: ['a', 'b', 'c'] } },
+          answer: { text: 'ans a1' },
+        },
+      ],
+    },
+  ],
+};
+
 const CONTESTANT_IDS = ['p1', 'p2'];
 const PLAYERS = CONTESTANT_IDS.map((id) => ({ id, name: id, score: 0 }));
 const HOST_CTX = { requesterId: 'host', isHost: true, players: PLAYERS };
@@ -103,6 +118,77 @@ describe('pick-clue', () => {
       HOST_CTX,
     );
     expect(repick).toEqual({ ok: false, error: expect.any(String) });
+  });
+});
+
+describe('set-slide', () => {
+  function withActiveSlideshowClue() {
+    const pick = reduceJeopardy(
+      initialState(),
+      BOARD_WITH_SLIDESHOW,
+      { type: 'pick-clue', categoryIndex: 0, clueIndex: 0 },
+      HOST_CTX,
+    );
+    if (!pick.ok) throw new Error('unreachable');
+    return pick.state;
+  }
+
+  it('lets the host move to a valid slide index', () => {
+    const result = reduceJeopardy(
+      withActiveSlideshowClue(),
+      BOARD_WITH_SLIDESHOW,
+      { type: 'set-slide', index: 2 },
+      HOST_CTX,
+    );
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.state.clueSlideIndex).toBe(2);
+  });
+
+  it('rejects a non-host', () => {
+    const result = reduceJeopardy(
+      withActiveSlideshowClue(),
+      BOARD_WITH_SLIDESHOW,
+      { type: 'set-slide', index: 1 },
+      ctxFor('p1'),
+    );
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('rejects an out-of-range index', () => {
+    const result = reduceJeopardy(
+      withActiveSlideshowClue(),
+      BOARD_WITH_SLIDESHOW,
+      { type: 'set-slide', index: 3 },
+      HOST_CTX,
+    );
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('rejects when there is no active clue', () => {
+    const result = reduceJeopardy(
+      initialState(),
+      BOARD_WITH_SLIDESHOW,
+      { type: 'set-slide', index: 0 },
+      HOST_CTX,
+    );
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('rejects when the active clue has no slideshow', () => {
+    const pick = reduceJeopardy(
+      initialState(),
+      BOARD,
+      { type: 'pick-clue', categoryIndex: 0, clueIndex: 0 },
+      HOST_CTX,
+    );
+    if (!pick.ok) throw new Error('unreachable');
+    const result = reduceJeopardy(pick.state, BOARD, { type: 'set-slide', index: 0 }, HOST_CTX);
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('resets to 0 when a new clue is picked', () => {
+    const state = withActiveSlideshowClue();
+    expect(state.clueSlideIndex).toBe(0);
   });
 });
 
@@ -400,6 +486,7 @@ describe('toJeopardyContestantView', () => {
       categoryIndex: 0,
       clueIndex: 1,
       clue: { text: 'a2' },
+      clueSlideIndex: 0,
       isDailyDouble: true,
     });
   });
