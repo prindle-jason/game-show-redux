@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   createFinalJeopardyFixtureRound,
   createFixtureRound,
+  createWheelFixtureRound,
   loadFixtureMediaAssets,
 } from './fixtures.js';
 import { uploadRoundMedia } from './media-upload.js';
@@ -135,6 +136,12 @@ function HostControls({ phase, queueIds }: { phase: string; queueIds: string[] }
             }
           >
             Add Final Jeopardy fixture round
+          </button>
+          <button
+            type="button"
+            onClick={() => send({ type: 'add-round-to-queue', round: createWheelFixtureRound() })}
+          >
+            Add Wheel fixture round
           </button>
           <button
             type="button"

@@ -16,9 +16,11 @@ function contestantIds(state: RoomState): string[] {
 function activeRoundStateFor(state: RoomState, entry: QueueEntry) {
   const module = roundModules[entry.round.type];
   if (!module) return null;
+  const roundNumber = state.queue.filter((e) => e.status === 'completed').length;
   return module.createInitialState(entry.round.data, {
     roundId: entry.round.roundId,
     contestantIds: contestantIds(state),
+    roundNumber,
   });
 }
 

@@ -198,10 +198,18 @@ export class GameRoom extends Server<Env> {
     const players = this.state.players
       .filter((player) => player.id !== this.state.hostId)
       .map((player) => ({ id: player.id, name: player.name, score: player.score }));
+
+    const extraContext = module.prepareActionContext?.(
+      activeRoundState,
+      activeEntry.round.data,
+      parsedAction.data,
+    );
+
     const result = module.reduce(activeRoundState, activeEntry.round.data, parsedAction.data, {
       requesterId: playerId,
       isHost: playerId === this.state.hostId,
       players,
+      ...extraContext,
     });
 
     if (!result.ok) {

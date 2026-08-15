@@ -4,7 +4,7 @@ import { wheelActionSchema, wheelPuzzleDataSchema } from './wheel-of-fortune.js'
 describe('wheelPuzzleDataSchema', () => {
   const validPuzzle = {
     category: 'Video Games',
-    solution: [[], ['IT IS'], ['DANGEROUS'], ['TO GO ALONE']],
+    solution: ['', 'IT IS', 'DANGEROUS', 'TO GO ALONE'],
     wedges: [{ kind: 'cash', value: 500 }, { kind: 'bankrupt' }, { kind: 'lose-turn' }],
     vowelCost: 250,
     solveBonus: 1000,
@@ -29,7 +29,11 @@ describe('wheelActionSchema', () => {
     { type: 'spin' },
     { type: 'guess-consonant', letter: 'T' },
     { type: 'buy-vowel', letter: 'A' },
-    { type: 'attempt-solve', guess: 'IT IS DANGEROUS TO GO ALONE' },
+    { type: 'attempt-solve' },
+    { type: 'judge-solve', correct: true },
+    { type: 'judge-solve', correct: false },
+    { type: 'skip-turn' },
+    { type: 'end-round' },
   ])('accepts a valid $type action', (action) => {
     expect(wheelActionSchema.safeParse(action).success).toBe(true);
   });
@@ -37,5 +41,9 @@ describe('wheelActionSchema', () => {
   it('rejects a letter longer than one character', () => {
     const action = { type: 'guess-consonant', letter: 'TH' };
     expect(wheelActionSchema.safeParse(action).success).toBe(false);
+  });
+
+  it('rejects judge-solve without a correct flag', () => {
+    expect(wheelActionSchema.safeParse({ type: 'judge-solve' }).success).toBe(false);
   });
 });

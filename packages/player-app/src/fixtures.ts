@@ -78,6 +78,32 @@ export function createFinalJeopardyFixtureRound(): Round {
   };
 }
 
+/**
+ * Hand-authored Wheel of Fortune fixture round, to exercise the turn/spin/
+ * solve flow until real round import/authoring exists.
+ */
+export function createWheelFixtureRound(): Round {
+  return {
+    schemaVersion: 1,
+    roundId: crypto.randomUUID(),
+    title: 'Wheel of Fortune (fixture)',
+    type: 'wheel-of-fortune',
+    data: {
+      category: 'Video Games',
+      solution: ['', 'IT IS', 'DANGEROUS', 'TO GO ALONE'],
+      wedges: [
+        { kind: 'cash', value: 300 },
+        { kind: 'cash', value: 500 },
+        { kind: 'cash', value: 700 },
+        { kind: 'bankrupt' },
+        { kind: 'lose-turn' },
+      ],
+      vowelCost: 250,
+      solveBonus: 1000,
+    },
+  };
+}
+
 async function fetchAsBlob(url: string): Promise<Blob> {
   const response = await fetch(url);
   if (!response.ok) {

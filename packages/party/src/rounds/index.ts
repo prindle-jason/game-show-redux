@@ -10,6 +10,9 @@ import type {
   RoundContestantView,
   RoundState,
   RoundType,
+  WheelAction,
+  WheelPuzzleData,
+  WheelState,
 } from '@gameshow/schema';
 import type { ResolvedFinalJeopardyData } from './final-jeopardy.js';
 import {
@@ -29,16 +32,34 @@ import {
   resolveJeopardyMedia,
   toJeopardyContestantView,
 } from './jeopardy.js';
+import type { ResolvedWheelPuzzleData, WheelActionContext } from './wheel-of-fortune.js';
+import {
+  createInitialWheelState,
+  isWheelComplete,
+  listWheelMediaUrls,
+  reduceWheel,
+  resolveWheelMedia,
+  toWheelContestantView,
+} from './wheel-of-fortune.js';
 
 export interface RoundModuleContext {
   roundId: string;
   contestantIds: string[];
+  /** Completed-queue-entry count when this round becomes active — 0 for the first round. */
+  roundNumber: number;
 }
 
 export interface RoundActionContext {
   requesterId: string;
   isHost: boolean;
   players: { id: string; name: string; score: number }[];
+  /**
+   * Extra fields a module's `prepareActionContext` chose to inject before
+   * dispatch (e.g. wheel-of-fortune's `spinResult`) — untyped here since
+   * `RoundActionContext` is shared across every round type; each module casts
+   * its own expected shape internally, same as `state`/`data`/`action`.
+   */
+  [key: string]: unknown;
 }
 
 export type RoundActionResult =
@@ -64,6 +85,19 @@ export interface RoundModule {
   resolveMedia(data: unknown, resolve: (ref: MediaRef) => ResolvedMediaRef): unknown;
   /** Every media URL in `resolvedData`, for the pre-round prefetch barrier. */
   listMediaUrls(resolvedData: unknown): string[];
+  /**
+   * Optional pre-dispatch hook for side effects `game-room.ts` (the DO,
+   * where real randomness/IO is allowed) must perform before `reduce` runs —
+   * e.g. wheel-of-fortune rolling a real wedge on a `spin` action. Returns
+   * extra fields to merge into the `RoundActionContext` handed to `reduce`,
+   * or `undefined` if this action needs nothing. Most modules don't define
+   * this at all.
+   */
+  prepareActionContext?(
+    state: RoundState,
+    data: unknown,
+    action: unknown,
+  ): Record<string, unknown> | undefined;
 }
 
 export const roundModules: Partial<Record<RoundType, RoundModule>> = {
@@ -105,5 +139,26 @@ export const roundModules: Partial<Record<RoundType, RoundModule>> = {
     resolveMedia: (data, resolve) => resolveFinalJeopardyMedia(data as FinalJeopardyData, resolve),
     listMediaUrls: (resolvedData) =>
       listFinalJeopardyMediaUrls(resolvedData as ResolvedFinalJeopardyData),
+  },
+  'wheel-of-fortune': {
+    createInitialState: (_data, context) =>
+      createInitialWheelState(context.roundId, context.contestantIds, context.roundNumber),
+    reduce: (state, data, action, context) =>
+      reduceWheel(
+        state as WheelState,
+        data as WheelPuzzleData,
+        action as WheelAction,
+        context as WheelActionContext,
+      ),
+    isComplete: (state) => isWheelComplete(state as WheelState),
+    toContestantView: (state, data, viewerId) =>
+      toWheelContestantView(state as WheelState, data as ResolvedWheelPuzzleData, viewerId),
+    resolveMedia: (data) => resolveWheelMedia(data as WheelPuzzleData),
+    listMediaUrls: (resolvedData) => listWheelMediaUrls(resolvedData as ResolvedWheelPuzzleData),
+    prepareActionContext: (_state, data, action) => {
+      if ((action as WheelAction).type !== 'spin') return undefined;
+      const wedges = (data as WheelPuzzleData).wedges;
+      return { spinResult: wedges[Math.floor(Math.random() * wedges.length)] };
+    },
   },
 };

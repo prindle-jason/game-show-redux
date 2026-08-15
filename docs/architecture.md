@@ -39,6 +39,8 @@ packages/
 
 Round types are a plugin: `schema` defines the contract (a `type` string, a zod schema for authored `data`, a zod schema for wire `Action`s, plus plain-TS `State`/`ContestantView` shapes), and `party` implements the behavior against it (`createInitialState`, `reduce`, `isComplete`, a contestant-view filter). Adding a round type means adding a new module + registry entry in `schema` and a matching behavior module in `party` — never touching existing round types or the room's core message loop.
 
+A round module may also define an optional `prepareActionContext(state, data, action)` hook, called by `game-room.ts` before `reduce` on every action — this is where a module performs whatever real side effect `reduce` itself must stay pure of (e.g. Wheel of Fortune rolling a random wedge on a `spin` action), returning extra fields merged into the shared `RoundActionContext` handed to `reduce`. Most modules don't need one; `game-room.ts` never branches on round type itself, generic or otherwise.
+
 V1's three round types (Jeopardy board, Final Jeopardy, Wheel of Fortune) were chosen specifically because they have different interaction contracts — buzz-in + host-judged, hidden-then-revealed, and turn-based-with-a-random-spin — which validates this plugin boundary early.
 
 ## Deployment
