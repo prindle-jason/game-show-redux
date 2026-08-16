@@ -12,9 +12,12 @@
     "deploy": "wrangler pages deploy dist --project-name=gameshow-builder"
   },
   "dependencies": {
+    "@gameshow/round-ui": "workspace:*",
     "@gameshow/schema": "workspace:*",
+    "jszip": "^3.10.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-router": "^7.18.2",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

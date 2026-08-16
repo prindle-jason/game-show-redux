@@ -1,10 +1,25 @@
-import { SCHEMA_PACKAGE_NAME } from '@gameshow/schema';
+import type { ComponentType } from 'react';
+import { Route, Routes } from 'react-router';
+import { RoundPicker } from './RoundPicker.js';
+import { type RoundEditorEntry, roundEditors } from './rounds/index.js';
+
+function hasEditor(
+  entry: RoundEditorEntry,
+): entry is RoundEditorEntry & { component: ComponentType } {
+  return entry.component !== undefined;
+}
 
 export function App() {
   return (
     <main>
-      <h1>Quiz Builder</h1>
-      <p>Placeholder scaffold, wired against {SCHEMA_PACKAGE_NAME}.</p>
+      <Routes>
+        <Route path="/" element={<RoundPicker />} />
+        {Object.values(roundEditors)
+          .filter(hasEditor)
+          .map((entry) => (
+            <Route key={entry.type} path={entry.path} element={<entry.component />} />
+          ))}
+      </Routes>
     </main>
   );
 }

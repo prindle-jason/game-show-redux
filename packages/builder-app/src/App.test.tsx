@@ -1,10 +1,27 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
+import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App.js';
 
+function renderAt(path: string) {
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <App />
+    </MemoryRouter>,
+  );
+}
+
 describe('App', () => {
-  it('renders the builder heading', () => {
-    render(<App />);
+  afterEach(() => cleanup());
+
+  it('shows the round-type picker at the root path', () => {
+    renderAt('/');
     expect(screen.getByRole('heading', { name: 'Quiz Builder' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Wheel of Fortune/ })).toBeInTheDocument();
+  });
+
+  it('shows the Wheel editor at its route', () => {
+    renderAt('/wheel-of-fortune');
+    expect(screen.getByText(/Round id:/)).toBeInTheDocument();
   });
 });

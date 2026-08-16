@@ -1,3 +1,4 @@
+import { SolutionBoard, wedgeLabel } from '@gameshow/round-ui';
 import type {
   ContestantRoomView,
   HostRoomView,
@@ -26,28 +27,6 @@ const CONSONANTS = 'BCDFGHJKLMNPQRSTVWXYZ'.split('');
 
 function nameFor(view: HostRoomView, playerId: string): string {
   return view.players.find((player) => player.id === playerId)?.name ?? playerId;
-}
-
-function wedgeLabel(wedge: WheelWedge): string {
-  switch (wedge.kind) {
-    case 'cash':
-      return `$${wedge.value}`;
-    case 'bankrupt':
-      return 'Bankrupt';
-    case 'lose-turn':
-      return 'Lose a turn';
-  }
-}
-
-function SolutionBoard({ rows }: { rows: string[] }) {
-  return (
-    <ul>
-      {rows.map((row, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: rows never reorder/insert/delete
-        <li key={index}>{row || ' '}</li>
-      ))}
-    </ul>
-  );
 }
 
 function RoundScores({
