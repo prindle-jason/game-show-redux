@@ -1,3 +1,4 @@
+import { JeopardyBoardGrid } from '@gameshow/round-ui';
 import type {
   ClientMessage,
   ContestantRoomView,
@@ -129,49 +130,32 @@ function HostJeopardyBoard({ view }: { view: HostRoomView }) {
   return (
     <div>
       <h2>Jeopardy board (host)</h2>
-      <table>
-        <thead>
-          <tr>
-            {data.categories.map((category) => (
-              <th key={category.name}>{category.name}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: rows }, (_, clueIndex) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity beyond position
-            <tr key={`row-${clueIndex}`}>
-              {data.categories.map((category, categoryIndex) => {
-                const clue = category.clues[clueIndex];
-                if (!clue) return <td key={category.name} />;
-                const revealed = state.revealedClues.some(
-                  (r) => r.categoryIndex === categoryIndex && r.clueIndex === clueIndex,
-                );
-                return (
-                  <td key={category.name}>
-                    {revealed ? (
-                      '—'
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={state.activeClue !== null}
-                        onClick={() =>
-                          send({
-                            type: 'round-action',
-                            action: { type: 'pick-clue', categoryIndex, clueIndex },
-                          })
-                        }
-                      >
-                        {clue.value}
-                      </button>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <JeopardyBoardGrid
+        categoryNames={data.categories.map((category) => category.name)}
+        rowCount={rows}
+        renderCell={(categoryIndex, clueIndex) => {
+          const clue = data.categories[categoryIndex]?.clues[clueIndex];
+          if (!clue) return null;
+          const revealed = state.revealedClues.some(
+            (r) => r.categoryIndex === categoryIndex && r.clueIndex === clueIndex,
+          );
+          if (revealed) return '—';
+          return (
+            <button
+              type="button"
+              disabled={state.activeClue !== null}
+              onClick={() =>
+                send({
+                  type: 'round-action',
+                  action: { type: 'pick-clue', categoryIndex, clueIndex },
+                })
+              }
+            >
+              {clue.value}
+            </button>
+          );
+        }}
+      />
 
       {activeClue && state.activeClue && (
         <div>
@@ -271,26 +255,14 @@ function ContestantJeopardyBoard({
   return (
     <div>
       <h2>Jeopardy board</h2>
-      <table>
-        <thead>
-          <tr>
-            {roundState.categories.map((category) => (
-              <th key={category.name}>{category.name}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: rows }, (_, clueIndex) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity beyond position
-            <tr key={`row-${clueIndex}`}>
-              {roundState.categories.map((category) => {
-                const clue = category.clues[clueIndex];
-                return <td key={category.name}>{clue && !clue.revealed ? clue.value : '—'}</td>;
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <JeopardyBoardGrid
+        categoryNames={roundState.categories.map((category) => category.name)}
+        rowCount={rows}
+        renderCell={(categoryIndex, clueIndex) => {
+          const clue = roundState.categories[categoryIndex]?.clues[clueIndex];
+          return clue && !clue.revealed ? clue.value : '—';
+        }}
+      />
 
       {roundState.activeClue && (
         <div>

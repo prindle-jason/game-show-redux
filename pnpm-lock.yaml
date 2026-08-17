@@ -115,6 +115,9 @@ importers:
       '@gameshow/schema':
         specifier: workspace:*
         version: link:../schema
+      jszip:
+        specifier: ^3.10.1
+        version: 3.10.1
       partysocket:
         specifier: ^1.3.0
         version: 1.3.0(react@19.2.8)

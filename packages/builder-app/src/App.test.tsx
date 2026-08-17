@@ -24,4 +24,14 @@ describe('App', () => {
     renderAt('/wheel-of-fortune');
     expect(screen.getByText(/Round id:/)).toBeInTheDocument();
   });
+
+  it('shows the Final Jeopardy editor at its route', () => {
+    renderAt('/final-jeopardy');
+    expect(screen.getByText(/Round id:/)).toBeInTheDocument();
+  });
+
+  it('shows the Jeopardy editor at its route', () => {
+    renderAt('/jeopardy');
+    expect(screen.getByText(/Round id:/)).toBeInTheDocument();
+  });
 });

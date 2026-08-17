@@ -26,6 +26,24 @@ export type ResolvedMediaRef =
   | { kind: 'slideshow'; urls: string[] };
 
 /**
+ * One entry per real file bundled in a round's zip (`assets/manifest.json`),
+ * written by `builder-app` from each attached file's actual `blob.type` and
+ * cross-checked by `player-app` against `listMediaRefs` on import. A
+ * `slideshow` `MediaRef` bundles several `assetId`s, but each decomposes to
+ * its own manifest entry as a plain `'image'` file (mirrors the convention in
+ * `player-app/src/fixtures.ts`) — `'slideshow'` itself is never a per-file kind.
+ */
+export const roundMediaManifestEntrySchema = z.object({
+  assetId: z.string().min(1),
+  kind: z.enum(['image', 'audio', 'video']),
+  contentType: z.string().min(1),
+});
+
+export const roundMediaManifestSchema = z.array(roundMediaManifestEntrySchema);
+
+export type RoundMediaManifestEntry = z.infer<typeof roundMediaManifestEntrySchema>;
+
+/**
  * Per-kind upload validation, shared by `party` (server-side enforcement) and
  * `player-app` (client-side pre-check before requesting an upload token).
  */

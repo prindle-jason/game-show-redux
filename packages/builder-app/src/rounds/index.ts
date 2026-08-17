@@ -1,5 +1,7 @@
 import type { RoundType } from '@gameshow/schema';
 import type { ComponentType } from 'react';
+import { FinalJeopardyEditor } from '../FinalJeopardyEditor.js';
+import { JeopardyEditor } from '../JeopardyEditor.js';
 import { WheelEditor } from '../WheelEditor.js';
 
 export interface RoundEditorEntry {
@@ -28,11 +30,13 @@ export const roundEditors: Record<RoundType, RoundEditorEntry> = {
     label: 'Jeopardy',
     description: 'Category/clue board round.',
     path: '/jeopardy',
+    component: JeopardyEditor,
   },
   'final-jeopardy': {
     type: 'final-jeopardy',
     label: 'Final Jeopardy',
     description: 'Single wagered clue round.',
     path: '/final-jeopardy',
+    component: FinalJeopardyEditor,
   },
 };

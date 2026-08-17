@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { MediaRef } from './media.js';
 import type {
   FinalJeopardyContestantView,
   FinalJeopardyState,
@@ -63,6 +64,30 @@ export const roundTypeDefinitions: Record<RoundType, RoundTypeDefinition> = {
     actionSchema: wheelActionSchema,
   },
 };
+
+/**
+ * Every `MediaRef` a round's authored `data` references, one small case per
+ * round type — mirrors `party/src/rounds/index.ts`'s per-type `resolveMedia`/
+ * `listMediaUrls` dispatch, but just collects refs instead of resolving them.
+ * `builder-app` uses this to know which assetIds it must bundle on export;
+ * `player-app` uses it to know which assetIds an imported zip must contain.
+ */
+export function listMediaRefs(round: Round): MediaRef[] {
+  switch (round.type) {
+    case 'jeopardy':
+      return round.data.categories.flatMap((category) =>
+        category.clues.flatMap((clue) =>
+          [clue.clue.media, clue.answer.media].filter((media) => media !== undefined),
+        ),
+      );
+    case 'final-jeopardy':
+      return [round.data.clue.media, round.data.answer.media].filter(
+        (media) => media !== undefined,
+      );
+    case 'wheel-of-fortune':
+      return [];
+  }
+}
 
 /**
  * Runtime state for whichever queue entry is `active`, discriminated by

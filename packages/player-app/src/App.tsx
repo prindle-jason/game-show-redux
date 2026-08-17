@@ -9,6 +9,7 @@ import {
 } from './fixtures.js';
 import { uploadRoundMedia } from './media-upload.js';
 import { useRoomStore } from './room-store.js';
+import { importRoundZip } from './round-import.js';
 import { roundBoards } from './rounds/index.js';
 
 function JoinForm() {
@@ -105,6 +106,7 @@ function HostControls({ phase, queueIds }: { phase: string; queueIds: string[] }
   const send = useRoomStore((state) => state.send);
   const requestMediaUploadTokens = useRoomStore((state) => state.requestMediaUploadTokens);
   const [uploading, setUploading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   async function addFixtureRound() {
     const round = createFixtureRound();
@@ -140,6 +142,25 @@ function HostControls({ phase, queueIds }: { phase: string; queueIds: string[] }
     }
   }
 
+  async function importRoundFile(file: File) {
+    setImportError(null);
+    setUploading(true);
+    try {
+      const { round, assets } = await importRoundZip(file);
+      await uploadRoundMedia(
+        round,
+        assets,
+        requestMediaUploadTokens,
+        import.meta.env.VITE_MEDIA_BASE_URL,
+      );
+      send({ type: 'add-round-to-queue', round });
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Failed to import round');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div>
       {phase === 'lobby' && (
@@ -160,6 +181,20 @@ function HostControls({ phase, queueIds }: { phase: string; queueIds: string[] }
           >
             Add Wheel fixture round
           </button>
+          <label>
+            Import round
+            <input
+              type="file"
+              accept=".zip"
+              disabled={uploading}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (file) void importRoundFile(file);
+              }}
+            />
+          </label>
+          {importError && <p role="alert">{importError}</p>}
           <button
             type="button"
             disabled={queueIds.length === 0}

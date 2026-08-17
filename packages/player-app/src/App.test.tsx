@@ -1,3 +1,4 @@
+import { CURRENT_ROUND_SCHEMA_VERSION, type Round } from '@gameshow/schema';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +23,40 @@ vi.mock('partysocket', () => ({
     }
   },
 }));
+
+vi.mock('./round-import.js', () => ({ importRoundZip: vi.fn() }));
+
+async function joinAsHostInLobby() {
+  const { App } = await import('./App.js');
+  render(<App />);
+
+  fireEvent.change(screen.getByLabelText('Room code'), { target: { value: 'ABC123' } });
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Host' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Join' }));
+
+  lastSocket?.dispatchEvent(new Event('open'));
+  lastSocket?.dispatchEvent(
+    new MessageEvent('message', {
+      data: JSON.stringify({ type: 'joined', playerId: 'p1', isHost: true }),
+    }),
+  );
+  lastSocket?.dispatchEvent(
+    new MessageEvent('message', {
+      data: JSON.stringify({
+        type: 'room-state',
+        view: {
+          phase: 'lobby',
+          hostId: 'p1',
+          players: [{ id: 'p1', name: 'Host', score: 0, connected: true }],
+          queue: [],
+          activeRoundState: null,
+        },
+      }),
+    }),
+  );
+
+  return await screen.findByLabelText('Import round');
+}
 
 describe('App', () => {
   beforeEach(() => {
@@ -230,5 +265,48 @@ describe('App', () => {
     expect(lastSocket).not.toBe(kickedSocket);
     lastSocket?.dispatchEvent(new Event('open'));
     expect(lastSocket?.sent).toEqual([JSON.stringify({ type: 'join', name: 'Sam' })]);
+  });
+
+  it('imports a round from a zip file and adds it to the queue', async () => {
+    const input = await joinAsHostInLobby();
+
+    const { importRoundZip } = await import('./round-import.js');
+    const importedRound: Round = {
+      schemaVersion: CURRENT_ROUND_SCHEMA_VERSION,
+      roundId: 'round-1',
+      title: 'Imported',
+      type: 'wheel-of-fortune',
+      data: {
+        category: 'Cat',
+        solution: ['ABC'],
+        wedges: [{ kind: 'cash', value: 100 }],
+        vowelCost: 100,
+        solveBonus: 100,
+      },
+    };
+    vi.mocked(importRoundZip).mockResolvedValueOnce({ round: importedRound, assets: [] });
+
+    const file = new File(['zip-bytes'], 'round.zip', { type: 'application/zip' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await vi.waitFor(() => {
+      expect(lastSocket?.sent).toContain(
+        JSON.stringify({ type: 'add-round-to-queue', round: importedRound }),
+      );
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows an error and adds nothing when the round import fails', async () => {
+    const input = await joinAsHostInLobby();
+
+    const { importRoundZip } = await import('./round-import.js');
+    vi.mocked(importRoundZip).mockRejectedValueOnce(new Error('Missing round.json'));
+
+    const file = new File(['zip-bytes'], 'round.zip', { type: 'application/zip' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Missing round.json');
+    expect(lastSocket?.sent.some((message) => message.includes('add-round-to-queue'))).toBe(false);
   });
 });

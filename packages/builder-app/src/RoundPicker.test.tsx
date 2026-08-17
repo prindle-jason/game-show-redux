@@ -16,14 +16,23 @@ describe('RoundPicker', () => {
     expect(link).toHaveAttribute('href', '/wheel-of-fortune');
   });
 
-  it('renders Jeopardy and Final Jeopardy as disabled, non-navigable cards', () => {
+  it('renders a working link for Final Jeopardy', () => {
     render(
       <MemoryRouter>
         <RoundPicker />
       </MemoryRouter>,
     );
-    expect(screen.queryByRole('link', { name: /^Jeopardy/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Final Jeopardy/ })).not.toBeInTheDocument();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(2);
+    const link = screen.getByRole('link', { name: /Final Jeopardy/ });
+    expect(link).toHaveAttribute('href', '/final-jeopardy');
+  });
+
+  it('renders a working link for Jeopardy', () => {
+    render(
+      <MemoryRouter>
+        <RoundPicker />
+      </MemoryRouter>,
+    );
+    const link = screen.getByRole('link', { name: /^Jeopardy/ });
+    expect(link).toHaveAttribute('href', '/jeopardy');
   });
 });
