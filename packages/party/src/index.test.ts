@@ -73,6 +73,121 @@ describe('worker fetch handler', () => {
   });
 });
 
+describe('POST /rooms', () => {
+  it('mints a room code and CORS-enabled response', async () => {
+    const response = await exports.default.fetch('https://example.com/rooms', { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    const body = (await response.json()) as { roomId: string; hostToken: string };
+    expect(body.roomId).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$/);
+    expect(body.hostToken.length).toBeGreaterThan(0);
+  });
+
+  it('mints different codes for back-to-back requests', async () => {
+    const first = await exports.default.fetch('https://example.com/rooms', { method: 'POST' });
+    const second = await exports.default.fetch('https://example.com/rooms', { method: 'POST' });
+    const firstBody = (await first.json()) as { roomId: string };
+    const secondBody = (await second.json()) as { roomId: string };
+
+    expect(firstBody.roomId).not.toBe(secondBody.roomId);
+  });
+
+  it('only grants host to a join presenting the minted token', async () => {
+    const response = await exports.default.fetch('https://example.com/rooms', { method: 'POST' });
+    const { roomId, hostToken } = (await response.json()) as {
+      roomId: string;
+      hostToken: string;
+    };
+
+    const impostor = await connect(roomId);
+    const impostorJoined = collect(impostor, 2);
+    send(impostor, { type: 'join', name: 'Someone' });
+    const [impostorJoinedMsg] = (await impostorJoined) as [
+      { type: 'joined'; playerId: string; isHost: boolean },
+      unknown,
+    ];
+    expect(impostorJoinedMsg.isHost).toBe(false);
+
+    const realHost = await connect(roomId);
+    const realHostJoined = collect(realHost, 2);
+    const impostorBroadcast = collect(impostor, 1);
+    send(realHost, { type: 'join', name: 'Host', hostToken });
+    const [realHostJoinedMsg] = (await realHostJoined) as [
+      { type: 'joined'; playerId: string; isHost: boolean },
+      unknown,
+    ];
+    await impostorBroadcast;
+    expect(realHostJoinedMsg.isHost).toBe(true);
+  });
+
+  it("typing the host's name with no session token never hijacks the host connection", async () => {
+    const response = await exports.default.fetch('https://example.com/rooms', { method: 'POST' });
+    const { roomId, hostToken } = (await response.json()) as {
+      roomId: string;
+      hostToken: string;
+    };
+
+    const host = await connect(roomId);
+    const hostJoined = collect(host, 2);
+    send(host, { type: 'join', name: 'Host', hostToken });
+    const [hostJoinedMsg] = (await hostJoined) as [
+      { type: 'joined'; playerId: string; isHost: boolean },
+      unknown,
+    ];
+    expect(hostJoinedMsg.isHost).toBe(true);
+
+    const impostor = await connect(roomId);
+    const impostorJoined = collect(impostor, 2);
+    const hostBroadcastOnImpostorJoin = collect(host, 1);
+    send(impostor, { type: 'join', name: 'Host' });
+    const [impostorJoinedMsg, impostorState] = (await impostorJoined) as [
+      { type: 'joined'; playerId: string; isHost: boolean },
+      { type: 'room-state'; view: { hostId: string } },
+    ];
+    await hostBroadcastOnImpostorJoin;
+
+    expect(impostorJoinedMsg.isHost).toBe(false);
+    expect(impostorJoinedMsg.playerId).not.toBe(hostJoinedMsg.playerId);
+    expect(impostorState.view.hostId).toBe(hostJoinedMsg.playerId);
+
+    const hostAfterAction = collect(host, 1);
+    send(host, { type: 'add-round-to-queue', round: FIXTURE_ROUND });
+    const [hostState] = (await hostAfterAction) as [
+      { type: 'room-state'; view: { queue: unknown[] } },
+    ];
+    expect(hostState.view.queue).toHaveLength(1);
+  });
+
+  it('reconnects into the same player record when the session token from `joined` is presented again', async () => {
+    const room = `room-${crypto.randomUUID()}`;
+
+    const first = await connect(room);
+    const firstJoined = collect(first, 2);
+    send(first, { type: 'join', name: 'Alex' });
+    const [firstJoinedMsg] = (await firstJoined) as [
+      { type: 'joined'; playerId: string; sessionToken: string },
+      unknown,
+    ];
+    first.close();
+
+    const rejoin = await connect(room);
+    const rejoinJoined = collect(rejoin, 2);
+    send(rejoin, {
+      type: 'join',
+      name: 'Alex',
+      sessionToken: firstJoinedMsg.sessionToken,
+    });
+    const [rejoinJoinedMsg, rejoinState] = (await rejoinJoined) as [
+      { type: 'joined'; playerId: string },
+      { type: 'room-state'; view: { players: { id: string }[] } },
+    ];
+
+    expect(rejoinJoinedMsg.playerId).toBe(firstJoinedMsg.playerId);
+    expect(rejoinState.view.players).toHaveLength(1);
+  });
+});
+
 describe('GameRoom', () => {
   it('splits host/contestant views and advances the queue', async () => {
     const room = `room-${crypto.randomUUID()}`;
@@ -93,11 +208,11 @@ describe('GameRoom', () => {
     send(contestant, { type: 'join', name: 'Sam' });
     const [contestantJoined, contestantStateAfterJoin] = (await contestantJoinMessages) as [
       { type: 'joined'; playerId: string; isHost: boolean },
-      { type: 'room-state'; view: Record<string, unknown> },
+      { type: 'room-state'; view: { hostId: string } },
     ];
     await hostBroadcastOnContestantJoin;
     expect(contestantJoined.isHost).toBe(false);
-    expect(contestantStateAfterJoin.view).not.toHaveProperty('hostId');
+    expect(contestantStateAfterJoin.view.hostId).toBe(hostJoined.playerId);
 
     const hostQueueUpdate = collect(host, 1);
     const contestantQueueUpdate = collect(contestant, 1);
@@ -267,6 +382,47 @@ describe('GameRoom', () => {
       { type: 'room-state'; view: { players: { name: string }[] } },
     ];
     expect(hostAfterKick.view.players.map((player) => player.name)).toEqual(['Host']);
+  });
+
+  it("reassigns host live via make-host, flipping both connections' views", async () => {
+    const room = `room-${crypto.randomUUID()}`;
+
+    const host = await connect(room);
+    const hostJoined = collect(host, 2);
+    send(host, { type: 'join', name: 'Host' });
+    const [hostJoinedMsg] = (await hostJoined) as [{ type: 'joined'; playerId: string }, unknown];
+
+    const contestant = await connect(room);
+    const contestantJoined = collect(contestant, 2);
+    const hostBroadcastOnJoin = collect(host, 1);
+    send(contestant, { type: 'join', name: 'Sam' });
+    const [contestantJoinedMsg] = (await contestantJoined) as [
+      { type: 'joined'; playerId: string },
+      unknown,
+    ];
+    await hostBroadcastOnJoin;
+
+    const hostAfterAdd = collect(host, 1);
+    const contestantAfterAdd = collect(contestant, 1);
+    send(host, { type: 'add-round-to-queue', round: FIXTURE_ROUND });
+    await hostAfterAdd;
+    await contestantAfterAdd;
+
+    const hostAfterMakeHost = collect(host, 1);
+    const contestantAfterMakeHost = collect(contestant, 1);
+    send(host, { type: 'make-host', playerId: contestantJoinedMsg.playerId });
+    const [hostView] = (await hostAfterMakeHost) as [
+      { type: 'room-state'; view: { hostId: string; queue: { round?: Round }[] } },
+    ];
+    const [contestantView] = (await contestantAfterMakeHost) as [
+      { type: 'room-state'; view: { hostId: string; queue: { round: Round }[] } },
+    ];
+
+    expect(hostView.view.hostId).toBe(contestantJoinedMsg.playerId);
+    expect(contestantView.view.hostId).toBe(contestantJoinedMsg.playerId);
+    expect(hostView.view.queue[0]).not.toHaveProperty('round');
+    expect(contestantView.view.queue[0]?.round).toEqual(FIXTURE_ROUND);
+    expect(hostJoinedMsg.playerId).not.toBe(contestantJoinedMsg.playerId);
   });
 });
 

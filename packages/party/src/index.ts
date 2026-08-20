@@ -1,4 +1,5 @@
 import { routePartykitRequest } from 'partyserver';
+import { handleCreateRoom } from './create-room.js';
 import type { Env } from './env.js';
 import { handleMediaGet, handleMediaOptions, handleMediaUpload } from './media.js';
 import { GameRoom } from './rooms/game-room.js';
@@ -9,6 +10,9 @@ export default {
   async fetch(request, env, _ctx): Promise<Response> {
     const url = new URL(request.url);
 
+    if (request.method === 'POST' && url.pathname === '/rooms') {
+      return handleCreateRoom(env);
+    }
     if (request.method === 'GET' && url.pathname.startsWith('/media/rooms/')) {
       return handleMediaGet(env, url.pathname);
     }

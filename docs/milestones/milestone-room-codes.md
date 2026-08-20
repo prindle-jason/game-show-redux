@@ -1,0 +1,43 @@
+# Next milestone: server-issued room codes + shareable join link
+
+**Status: Not started.**
+
+## Context
+
+Every round type now has a working builder editor (`docs/milestone-builder-jeopardy-final-jeopardy.md`, plus Wheel before it) and a real zip import path (`docs/milestone-round-import.md`) — the queue can be filled with real authored rounds instead of only fixtures. What's left unaddressed is the oldest deferred item in `future-enhancements.md`: room creation is entirely implicit. `player-app`'s `JoinForm` (`packages/player-app/src/App.tsx`) is a single free-text "Room code" input; whoever connects first to a given code becomes host (`applyJoin` in `packages/party/src/rooms/room-logic.ts:76`, `hostId: isFirstPlayer ? player.id : state.hostId`). There's no "create a room" step, no server-minted code, and no shareable link — getting a group into the same room means one person making up a string and reading it out loud to everyone else.
+
+`party`'s `fetch` handler (`packages/party/src/index.ts`) already has precedent for HTTP routes living alongside the websocket upgrade — `/media/rooms/*` and `/media/upload` are handled the same way media does its job without a separate service (per `architecture.md`'s "Backend" note). Room code minting fits the same pattern: one more route in the same handler, no new deployable.
+
+## Design decisions
+
+- **Code format: 4-character alphanumeric, uppercase, confusable characters excluded.** Word-pairs (e.g. "clever-otter") need a bundled word list and are longer to read aloud for no real benefit at this scale; a short code in the style of Kahoot/Jackbox is the familiar shape for this genre and is trivial to generate. Alphabet excludes `0/O`, `1/I/L` (and similarly-shaped digit/letter pairs) so a code read aloud or handwritten isn't ambiguous. 4 characters from a ~30-symbol alphabet is roughly 800,000 combinations — collisions are rare but not impossible, so minting still checks and retries (below) rather than assuming uniqueness.
+- **Minting endpoint checks for collision by asking the room itself, not a separate registry.** There's no durable list of "codes in use" (rooms are ephemeral DOs, per `requirements.md`'s Persistence section), so the only source of truth for "is this code taken" is the `GameRoom` Durable Object named after it. `GameRoom` gains a plain RPC method (e.g. `isEmpty(): boolean`, checking `this.state.hostId === ''`) that the `fetch` handler calls via `getServerByName` (from `partyserver`, already used indirectly via `routePartykitRequest`) before handing the code back. A fresh DO is cheap to spin up for this check — it stays idle and is indistinguishable from one that was never touched. Retry a small fixed number of times (e.g. 5) on collision before giving up with a 500; at 800k combinations this should never realistically exhaust.
+- **Host assignment doesn't change.** This milestone doesn't touch `applyJoin`'s first-joiner-is-host rule — it only removes the need to *invent* a code by hand. The host still becomes host by being the first (and, by construction of this flow, only realistic) joiner of a code nobody else has typed yet.
+- **The shareable link points at `player-app` itself, not at `party`.** A join link only makes sense as a URL a browser can open directly — `party` is just the websocket/API host. The link is built client-side as `${window.location.origin}?room=${code}`, which is correct in every environment (local dev, Pages preview, production) with no new env var, since it's just wherever `player-app` is currently being served from.
+- **Manual code entry is contestant-only — hosts never see it.** "Create room" is the *only* way to become host; there's no path where a host types a code by hand, since that code wouldn't exist yet for `isEmpty()` to have validated. The free-text room-code field is still useful for local dev/testing (typing a throwaway code without hitting the mint endpoint) and as a fallback if a contestant is told a code verbally instead of sent a link. Both the manual and link-based contestant paths converge on the same `join(roomCode, name)` call already in `room-store.ts`.
+- **A shared name field, with one blank-name special case.** Both "Create room" and "Join room" collect a name in the same field before acting. Leaving it blank only has a default for the host path — `join(roomId, name.trim() || 'Host')` — since a solo host doesn't gain anything from being forced to type something. Joining (manual code or link) keeps today's behavior of requiring a non-blank name; there's no sensible default display name for a contestant.
+
+## What
+
+- **`party`**: a `POST /rooms` route in `index.ts`'s `fetch` handler (same style as the `/media/*` routes) that generates a candidate code, calls `getServerByName(env.GameRoom, code)` and the new `isEmpty()` RPC method, retries on a rare collision, and returns `{ roomId: code }` as JSON once an unused one is found.
+- **`GameRoom`**: add the `isEmpty()` method (`packages/party/src/rooms/game-room.ts`) — reads `this.state.hostId === ''`, no state change, callable via DO RPC through the stub `getServerByName` returns.
+- **`player-app`**: replace the single `JoinForm` with two landing-screen layouts, depending on whether the URL already carries a `room` param:
+  - **No `room` param (fresh landing page)** — a name field, a **Create room** button, and (separately) a room-code field + **Join room** button:
+    - **Create room**: calls the new mint endpoint, then `join(roomId, name.trim() || 'Host')`. Once connected, the lobby view gains a visible room code plus a **Copy join link** button (`${window.location.origin}?room=${roomId}`).
+    - **Join room**: unchanged validation from today's `JoinForm` (both fields required) — calls `join(roomCode, name)`. This is the *only* path a manually-typed code takes, and it never produces a host.
+  - **`room` param present (arrived via a shared link)** — the code comes from `URLSearchParams`, shown read-only, no code input and no "Create room" option (a link always means joining). Just a name field (required, no default) and a single **Join** button, resolving the "when does a link-joining player enter their name" gap — they enter it here, before the socket ever connects, same as the manual path just with the code pre-filled and locked.
+- Tests: `isEmpty()` reports true for a fresh room and false once a player has joined; the mint route returns a valid-format code and retries past a forced collision (mock `isEmpty` to return `false` once, `true` after); `player-app`'s URL-param join path renders the name-only form and calls `join` with the code from the URL, unchanged from manual entry otherwise.
+
+**Explicitly out of scope**: durable/persistent room codes (a code is only ever "in use" for the lifetime of that Durable Object's in-memory state — see `future-enhancements.md`'s durable-room-state item, unrelated to this milestone); any change to host-assignment logic or reconnect; rate-limiting the mint endpoint (game-night scale, not public-internet scale); QR codes or any join mechanism beyond a plain URL.
+
+## Why
+
+This is the last piece of the room-shell experience that was explicitly deferred (`milestone-room-shell.md`'s original scope, called out again in `future-enhancements.md`) rather than actually decided against — the room-shell milestone intentionally left it out so a UI decision here wouldn't constrain that milestone's scope. With the builder and import paths now in place, the remaining friction in actually getting a group into a game is entirely this: reading a made-up string aloud versus tapping a link. It's also low-risk relative to the reliability items (durable state, session reconnect) — no round-type or state-machine code is touched, just how a code comes into existence and how it's shared.
+
+## Done when
+
+- Opening `player-app` fresh (no `room` param) shows a name field, a **Create room** button, and a separate room-code + **Join room** button; **Create room** mints a code via `party`, joins that room automatically as host (defaulting the name to "Host" if left blank), and displays the room code plus a copyable join link.
+- Opening a copied join link in a second browser (or an incognito window) shows the room code fixed/read-only and only a name field + **Join** button; submitting a name joins as a contestant.
+- The manual **Join room** path (typed code + name) still works unchanged, for local testing or a verbally-shared code — and never results in becoming host.
+- Minting two rooms back-to-back never returns the same code (verified by the retry-on-collision test, not just by chance).
+- `typecheck`, `lint`, `test`, and `build` stay green across the monorepo.

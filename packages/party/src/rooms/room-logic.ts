@@ -72,22 +72,36 @@ export function createInitialRoomState(): RoomState {
   };
 }
 
-/** Reconnect-by-name: a name that matches an existing player reuses that player's id/score. */
-export function applyJoin(state: RoomState, name: string): { state: RoomState; playerId: string } {
-  const existing = state.players.find((player) => player.name === name);
+/**
+ * Reconnect-by-session-token: `reconnectPlayerId` is resolved by the caller
+ * (`game-room.ts`, which alone knows the room's session-token map) from a
+ * token the client presented, never from `name` — a display name carries no
+ * identity, so two players can share one without colliding. `claimsHost` is
+ * likewise decided by the caller (which alone knows the room's host-claim
+ * token) — this stays a pure state transition with no policy of its own
+ * about who's allowed to host or reconnect.
+ */
+export function applyJoin(
+  state: RoomState,
+  name: string,
+  claimsHost: boolean,
+  reconnectPlayerId: string | null,
+): { state: RoomState; playerId: string } {
+  const existing = reconnectPlayerId
+    ? state.players.find((player) => player.id === reconnectPlayerId)
+    : undefined;
   if (existing) {
     return {
       state: {
         ...state,
         players: state.players.map((player) =>
-          player.id === existing.id ? { ...player, connected: true } : player,
+          player.id === existing.id ? { ...player, connected: true, name } : player,
         ),
       },
       playerId: existing.id,
     };
   }
 
-  const isFirstPlayer = state.players.length === 0;
   const player: Player = {
     id: crypto.randomUUID(),
     name,
@@ -97,7 +111,7 @@ export function applyJoin(state: RoomState, name: string): { state: RoomState; p
   return {
     state: {
       ...state,
-      hostId: isFirstPlayer ? player.id : state.hostId,
+      hostId: claimsHost ? player.id : state.hostId,
       players: [...state.players, player],
     },
     playerId: player.id,
@@ -319,6 +333,23 @@ export function kickPlayer(state: RoomState, playerId: string, requesterId: stri
   };
 }
 
+export function makeHost(
+  state: RoomState,
+  targetPlayerId: string,
+  requesterId: string,
+): ActionResult {
+  const hostError = requireHost(state, requesterId);
+  if (hostError) return { ok: false, error: hostError };
+  if (state.phase !== 'lobby')
+    return { ok: false, error: 'Host can only be reassigned in the lobby' };
+  if (targetPlayerId === state.hostId) return { ok: false, error: 'That player is already host' };
+  if (!state.players.some((player) => player.id === targetPlayerId)) {
+    return { ok: false, error: 'No such player' };
+  }
+
+  return { ok: true, state: { ...state, hostId: targetPlayerId } };
+}
+
 /** Filters `activeRoundState` through the active round's own contestant-view function, if any. */
 export function toContestantView(state: RoomState, viewerId: string): ContestantRoomView {
   const activeEntry = state.queue.find((entry) => entry.status === 'active');
@@ -330,6 +361,7 @@ export function toContestantView(state: RoomState, viewerId: string): Contestant
 
   return {
     phase: state.phase,
+    hostId: state.hostId,
     players: state.players,
     queue: state.queue.map((entry) => ({
       queueEntryId: entry.queueEntryId,

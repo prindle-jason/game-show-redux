@@ -9,6 +9,7 @@ import {
   applyScoreDeltas,
   createInitialRoomState,
   kickPlayer,
+  makeHost,
   removeFromQueue,
   reorderQueue,
   resetScores,
@@ -66,8 +67,14 @@ function resolveByAssetId(ref: MediaRef): ResolvedMediaRef {
   return { kind: ref.kind, url: `https://media/${ref.assetId}` };
 }
 
-function joinRoom(state: RoomState, name: string) {
-  return applyJoin(state, name);
+/** Defaults to the pre-token "first joiner is host" behavior most tests below rely on. */
+function joinRoom(
+  state: RoomState,
+  name: string,
+  claimsHost = state.players.length === 0,
+  reconnectPlayerId: string | null = null,
+) {
+  return applyJoin(state, name, claimsHost, reconnectPlayerId);
 }
 
 describe('applyJoin', () => {
@@ -84,14 +91,42 @@ describe('applyJoin', () => {
     expect(second.state.hostId).not.toBe(second.playerId);
   });
 
-  it('reconnects an existing player by name instead of duplicating them', () => {
+  it('reconnects an existing player when the matching session-derived id is presented', () => {
     const first = joinRoom(createInitialRoomState(), 'Alex');
     const disconnected = applyDisconnect(first.state, first.playerId);
-    const rejoin = joinRoom(disconnected, 'Alex');
+    const rejoin = joinRoom(disconnected, 'Alex', false, first.playerId);
 
     expect(rejoin.playerId).toBe(first.playerId);
     expect(rejoin.state.players).toHaveLength(1);
     expect(rejoin.state.players[0]?.connected).toBe(true);
+  });
+
+  it('never reconnects on name match alone (no session token presented)', () => {
+    const host = joinRoom(createInitialRoomState(), 'Host');
+    const impostor = joinRoom(host.state, 'Host');
+
+    expect(impostor.playerId).not.toBe(host.playerId);
+    expect(impostor.state.players).toHaveLength(2);
+    expect(impostor.state.hostId).toBe(host.playerId);
+  });
+
+  it('ignores a session-derived id that no longer exists in the room', () => {
+    const { state } = joinRoom(createInitialRoomState(), 'Alex');
+    const rejoin = joinRoom(state, 'Sam', false, 'not-a-real-id');
+    expect(rejoin.state.players).toHaveLength(2);
+  });
+
+  it('does not grant host to a first joiner whose claimsHost is false (reserved room, no/mismatched token)', () => {
+    const { state, playerId } = applyJoin(createInitialRoomState(), 'Sam', false, null);
+    expect(state.hostId).toBe('');
+    expect(state.hostId).not.toBe(playerId);
+  });
+
+  it('grants host to whichever joiner presents claimsHost true, even if not first', () => {
+    const first = applyJoin(createInitialRoomState(), 'Sam', false, null);
+    const second = applyJoin(first.state, 'Alex', true, null);
+    expect(second.state.hostId).toBe(second.playerId);
+    expect(second.state.hostId).not.toBe(first.playerId);
   });
 });
 
@@ -368,7 +403,7 @@ describe('activeRoundState', () => {
 });
 
 describe('toContestantView', () => {
-  it('never exposes hostId or round content', () => {
+  it('exposes hostId (so clients can derive isHost live) but never round content', () => {
     const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
     const contestant = joinRoom(state, 'Sam');
     const withRound = addRoundToQueue(
@@ -380,7 +415,7 @@ describe('toContestantView', () => {
     if (!withRound.ok) throw new Error('unreachable');
 
     const view = toContestantView(withRound.state, contestant.playerId);
-    expect(view).not.toHaveProperty('hostId');
+    expect(view.hostId).toBe(playerId);
     expect(view.queue).toEqual([
       { queueEntryId: withRound.state.queue[0]?.queueEntryId, status: 'pending' },
     ]);
@@ -503,6 +538,54 @@ describe('kickPlayer', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('unreachable');
     expect(result.state.players.map((player) => player.id)).toEqual([playerId]);
+  });
+});
+
+describe('makeHost', () => {
+  it('rejects a non-host request', () => {
+    const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
+    const contestant = joinRoom(state, 'Sam');
+    const result = makeHost(contestant.state, playerId, contestant.playerId);
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('rejects reassignment outside the lobby', () => {
+    const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
+    const contestant = joinRoom(state, 'Sam');
+    const withRound = addRoundToQueue(
+      contestant.state,
+      FIXTURE_ROUND,
+      playerId,
+      noopResolveMediaRef,
+    );
+    if (!withRound.ok) throw new Error('unreachable');
+    const started = startGame(withRound.state, playerId);
+    if (!started.ok) throw new Error('unreachable');
+
+    const result = makeHost(started.state, contestant.playerId, playerId);
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('rejects making an unknown player host', () => {
+    const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
+    const result = makeHost(state, 'not-a-real-id', playerId);
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('rejects making the current host host again', () => {
+    const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
+    const result = makeHost(state, playerId, playerId);
+    expect(result).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it('reassigns hostId to the target player', () => {
+    const { state, playerId } = joinRoom(createInitialRoomState(), 'Host');
+    const contestant = joinRoom(state, 'Sam');
+
+    const result = makeHost(contestant.state, contestant.playerId, playerId);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.state.hostId).toBe(contestant.playerId);
   });
 });
 

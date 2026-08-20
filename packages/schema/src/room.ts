@@ -74,14 +74,29 @@ export interface QueueEntryView {
 }
 
 /**
- * What contestants receive: no `round`/`hostId`, and `activeRoundState` is
- * whatever that round type's own contestant view produces (see round.ts's
- * `RoundContestantView`) — `null` when `phase` isn't `'playing'`.
+ * What contestants receive: no `round`, and `activeRoundState` is whatever
+ * that round type's own contestant view produces (see round.ts's
+ * `RoundContestantView`) — `null` when `phase` isn't `'playing'`. `hostId` is
+ * included (contestants already see every player's record via `players`, so
+ * this labels one rather than exposing anything new) so clients can derive
+ * `isHost` live instead of caching a one-shot flag from the `joined` message.
  */
 export interface ContestantRoomView {
   phase: RoomPhase;
+  hostId: string;
   players: Player[];
   queue: QueueEntryView[];
   activeRoundState: RoundContestantView | null;
   roundComplete: boolean;
+}
+
+/**
+ * `POST /rooms`'s response — `party` fully controls this shape (not a wire
+ * message crossing the trust boundary the other way), so plain TS, not zod.
+ * `hostToken` must be presented on the `join` message that follows to become
+ * host of this room; see room-codes milestone doc.
+ */
+export interface CreateRoomResponse {
+  roomId: string;
+  hostToken: string;
 }

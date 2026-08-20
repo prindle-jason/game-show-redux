@@ -11,7 +11,14 @@ import { roundSchema } from './round.js';
  * from round.ts).
  */
 export const clientMessageSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('join'), name: z.string().min(1) }),
+  z.object({
+    type: z.literal('join'),
+    name: z.string().min(1),
+    /** Presented only by the client that minted this room via `POST /rooms`; grants host. */
+    hostToken: z.string().min(1).optional(),
+    /** Identifies a returning player (see `sessionStorage`-backed persistence in `room-store.ts`). */
+    sessionToken: z.string().min(1).optional(),
+  }),
   z.object({ type: z.literal('add-round-to-queue'), round: roundSchema }),
   z.object({
     type: z.literal('remove-from-queue'),
@@ -26,6 +33,7 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('return-to-lobby') }),
   z.object({ type: z.literal('reset-scores') }),
   z.object({ type: z.literal('kick-player'), playerId: z.string().min(1) }),
+  z.object({ type: z.literal('make-host'), playerId: z.string().min(1) }),
   z.object({ type: z.literal('round-action'), action: z.unknown() }),
   z.object({ type: z.literal('round-media-ready') }),
   z.object({ type: z.literal('reveal-media-anyway') }),
@@ -50,7 +58,7 @@ export type ClientMessage = z.infer<typeof clientMessageSchema>;
  * controls their shape (see room.ts for the host/contestant view split).
  */
 export type ServerMessage =
-  | { type: 'joined'; playerId: string; isHost: boolean }
+  | { type: 'joined'; playerId: string; isHost: boolean; sessionToken: string }
   | { type: 'kicked'; reason?: string }
   | { type: 'room-state'; view: HostRoomView | ContestantRoomView }
   | { type: 'media-upload-tokens'; tokens: Array<{ assetId: string; token: string }> }

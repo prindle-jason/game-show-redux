@@ -13,15 +13,20 @@ type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'closed';
 interface RoomStore {
   status: ConnectionStatus;
   roomCode: string | null;
-  self: { playerId: string; isHost: boolean } | null;
+  self: { playerId: string } | null;
   view: HostRoomView | ContestantRoomView | null;
   error: string | null;
-  join: (roomCode: string, name: string) => void;
+  join: (roomCode: string, name: string, hostToken?: string) => void;
   send: (message: ClientMessage) => void;
   requestMediaUploadTokens: (
     roundId: string,
     assets: Array<{ assetId: string; kind: MediaRef['kind']; contentType: string; size: number }>,
   ) => Promise<Array<{ assetId: string; token: string }>>;
+}
+
+/** Scoped per room so a `sessionStorage` tab that visited multiple rooms doesn't cross-wire tokens. */
+function sessionTokenKey(roomCode: string): string {
+  return `gameshow:sessionToken:${roomCode}`;
 }
 
 let socket: PartySocket | null = null;
@@ -41,7 +46,7 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   self: null,
   view: null,
   error: null,
-  join: (roomCode, name) => {
+  join: (roomCode, name, hostToken) => {
     if (socket) return;
 
     set({ status: 'connecting', roomCode });
@@ -53,18 +58,21 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
 
     socket.addEventListener('open', () => {
       set({ status: 'connected' });
-      get().send({ type: 'join', name });
+      const sessionToken = sessionStorage.getItem(sessionTokenKey(roomCode)) ?? undefined;
+      get().send({ type: 'join', name, hostToken, sessionToken });
     });
 
     socket.addEventListener('message', (event) => {
       const message = JSON.parse(event.data as string) as ServerMessage;
       if (message.type === 'joined') {
-        set({ self: { playerId: message.playerId, isHost: message.isHost } });
+        sessionStorage.setItem(sessionTokenKey(roomCode), message.sessionToken);
+        set({ self: { playerId: message.playerId } });
       } else if (message.type === 'room-state') {
         set({ view: message.view });
       } else if (message.type === 'kicked') {
         socket?.close();
         socket = null;
+        sessionStorage.removeItem(sessionTokenKey(roomCode));
         set({
           status: 'idle',
           roomCode: null,

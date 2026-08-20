@@ -20,6 +20,7 @@ import {
   applyScoreDeltas,
   createInitialRoomState,
   kickPlayer,
+  makeHost,
   removeFromQueue,
   reorderQueue,
   resetScores,
@@ -47,6 +48,26 @@ export class GameRoom extends Server<Env> {
   private state: RoomState = createInitialRoomState();
   private mediaTimeout: { queueEntryId: string; handle: ReturnType<typeof setTimeout> } | null =
     null;
+  /** Set once by `tryReserveHost()` at mint time; only a `join` presenting this exact value may become host. */
+  private hostClaimToken: string | null = null;
+  /**
+   * Token -> playerId, minted on each new player's first join and never
+   * broadcast — presenting a valid entry on a later `join` reconnects into
+   * that player's existing record instead of matching by (collidable) name.
+   */
+  private sessionTokens = new Map<string, string>();
+
+  /**
+   * Atomic check-and-claim, called via DO RPC from `create-room.ts`'s mint
+   * route. Returns `null` if this room was already reserved (the mint route
+   * treats that as a collision and retries a different code), otherwise
+   * mints and stores the token a subsequent `join` must present to be host.
+   */
+  tryReserveHost(): string | null {
+    if (this.hostClaimToken !== null) return null;
+    this.hostClaimToken = crypto.randomUUID();
+    return this.hostClaimToken;
+  }
 
   override async onMessage(connection: Connection<ConnectionState>, raw: WSMessage): Promise<void> {
     let parsed: unknown;
@@ -71,13 +92,30 @@ export class GameRoom extends Server<Env> {
     message: ClientMessage,
   ): Promise<void> {
     if (message.type === 'join') {
-      const { state, playerId } = applyJoin(this.state, message.name);
+      const hasReservation = this.hostClaimToken !== null;
+      const claimsHost =
+        this.state.hostId === '' &&
+        (hasReservation
+          ? message.hostToken === this.hostClaimToken
+          : this.state.players.length === 0);
+
+      const claimedPlayerId = message.sessionToken
+        ? (this.sessionTokens.get(message.sessionToken) ?? null)
+        : null;
+      const { state, playerId } = applyJoin(this.state, message.name, claimsHost, claimedPlayerId);
       this.state = state;
+
+      const presentedToken = message.sessionToken ?? null;
+      const reconnected = presentedToken !== null && playerId === claimedPlayerId;
+      const sessionToken = reconnected && presentedToken ? presentedToken : crypto.randomUUID();
+      if (!reconnected) this.sessionTokens.set(sessionToken, playerId);
+
       connection.setState({ playerId });
       send(connection, {
         type: 'joined',
         playerId,
         isHost: playerId === this.state.hostId,
+        sessionToken,
       });
       this.broadcastViews();
       return;
@@ -157,6 +195,9 @@ export class GameRoom extends Server<Env> {
             kickedConnection.close();
           }
         }
+        break;
+      case 'make-host':
+        actionResult = makeHost(this.state, message.playerId, playerId);
         break;
     }
 

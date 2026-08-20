@@ -1,5 +1,6 @@
 import { SCHEMA_PACKAGE_NAME } from '@gameshow/schema';
 import { useState } from 'react';
+import { createRoom } from './create-room.js';
 import {
   createFinalJeopardyFixtureRound,
   createFixtureRound,
@@ -12,8 +13,13 @@ import { useRoomStore } from './room-store.js';
 import { importRoundZip } from './round-import.js';
 import { roundBoards } from './rounds/index.js';
 
-function JoinForm() {
-  const [roomCode, setRoomCode] = useState('');
+/** Read once per mount; the link-join flow never needs the param to change underneath it. */
+function useRoomCodeParam(): string | null {
+  const [roomCodeParam] = useState(() => new URLSearchParams(window.location.search).get('room'));
+  return roomCodeParam;
+}
+
+function LinkJoinForm({ roomCode }: { roomCode: string }) {
   const [name, setName] = useState('');
   const join = useRoomStore((state) => state.join);
   const status = useRoomStore((state) => state.status);
@@ -22,14 +28,11 @@ function JoinForm() {
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        if (!roomCode.trim() || !name.trim()) return;
-        join(roomCode.trim(), name.trim());
+        if (!name.trim()) return;
+        join(roomCode, name.trim());
       }}
     >
-      <label>
-        Room code
-        <input value={roomCode} onChange={(event) => setRoomCode(event.target.value)} />
-      </label>
+      <p>Room code: {roomCode}</p>
       <label>
         Name
         <input value={name} onChange={(event) => setName(event.target.value)} />
@@ -39,6 +42,62 @@ function JoinForm() {
       </button>
     </form>
   );
+}
+
+function CreateOrJoinForm() {
+  const [roomCode, setRoomCode] = useState('');
+  const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const join = useRoomStore((state) => state.join);
+  const status = useRoomStore((state) => state.status);
+  const busy = status === 'connecting' || status === 'connected';
+
+  async function handleCreateRoom() {
+    setCreateError(null);
+    setCreating(true);
+    try {
+      const { roomId, hostToken } = await createRoom();
+      join(roomId, name.trim() || 'Host', hostToken);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : 'Failed to create room');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div>
+      <label>
+        Name
+        <input value={name} onChange={(event) => setName(event.target.value)} />
+      </label>
+      <button type="button" disabled={busy || creating} onClick={() => void handleCreateRoom()}>
+        {creating ? 'Creating…' : 'Create room'}
+      </button>
+      {createError && <p role="alert">{createError}</p>}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!roomCode.trim() || !name.trim()) return;
+          join(roomCode.trim(), name.trim());
+        }}
+      >
+        <label>
+          Room code
+          <input value={roomCode} onChange={(event) => setRoomCode(event.target.value)} />
+        </label>
+        <button type="submit" disabled={busy}>
+          Join room
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function JoinForm() {
+  const roomCodeParam = useRoomCodeParam();
+  return roomCodeParam ? <LinkJoinForm roomCode={roomCodeParam} /> : <CreateOrJoinForm />;
 }
 
 function QueueEntryRow({
@@ -84,15 +143,22 @@ function QueueEntryRow({
 function PlayerRow({
   player,
   canKick,
+  canMakeHost,
 }: {
   player: { id: string; name: string; score: number; connected: boolean };
   canKick: boolean;
+  canMakeHost: boolean;
 }) {
   const send = useRoomStore((state) => state.send);
 
   return (
     <li>
       {player.name} — {player.score} {player.connected ? '' : '(disconnected)'}
+      {canMakeHost && (
+        <button type="button" onClick={() => send({ type: 'make-host', playerId: player.id })}>
+          Make host
+        </button>
+      )}
       {canKick && (
         <button type="button" onClick={() => send({ type: 'kick-player', playerId: player.id })}>
           Kick
@@ -226,11 +292,13 @@ function ConnectedRoom() {
   const self = useRoomStore((state) => state.self);
   const view = useRoomStore((state) => state.view);
   const error = useRoomStore((state) => state.error);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   if (!view || !self) {
     return <p>Connecting…</p>;
   }
 
+  const isHost = view.hostId === self.playerId;
   const queueIds = view.queue.map((entry) => entry.queueEntryId);
   const Board = view.activeRoundState ? roundBoards[view.activeRoundState.type] : undefined;
 
@@ -239,13 +307,26 @@ function ConnectedRoom() {
       <p>Room code: {roomCode}</p>
       <p>Phase: {view.phase}</p>
       {error && <p role="alert">{error}</p>}
+      {isHost && (
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard
+              .writeText(`${window.location.origin}?room=${roomCode}`)
+              .then(() => setLinkCopied(true));
+          }}
+        >
+          {linkCopied ? 'Copied!' : 'Copy join link'}
+        </button>
+      )}
       <h2>Players</h2>
       <ul aria-label="Players">
         {view.players.map((player) => (
           <PlayerRow
             key={player.id}
             player={player}
-            canKick={self.isHost && view.phase === 'lobby' && player.id !== self.playerId}
+            canKick={isHost && view.phase === 'lobby' && player.id !== self.playerId}
+            canMakeHost={isHost && view.phase === 'lobby' && player.id !== self.playerId}
           />
         ))}
       </ul>
@@ -255,10 +336,10 @@ function ConnectedRoom() {
           <QueueEntryRow key={entry.queueEntryId} entry={entry} index={index} queueIds={queueIds} />
         ))}
       </ul>
-      {self.isHost && <HostControls phase={view.phase} queueIds={queueIds} />}
+      {isHost && <HostControls phase={view.phase} queueIds={queueIds} />}
       {view.phase === 'playing' && view.roundComplete && <p>Round complete</p>}
       {Board ? (
-        <Board view={view} playerId={self.playerId} isHost={self.isHost} />
+        <Board view={view} playerId={self.playerId} isHost={isHost} />
       ) : (
         <>
           <h2>Raw state</h2>

@@ -52,7 +52,7 @@ async function joinAs(name: string, playerId: string, isHost: boolean) {
 
   fireEvent.change(screen.getByLabelText('Room code'), { target: { value: 'ABC123' } });
   fireEvent.change(screen.getByLabelText('Name'), { target: { value: name } });
-  fireEvent.click(screen.getByRole('button', { name: 'Join' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
   lastSocket?.dispatchEvent(new Event('open'));
   lastSocket?.dispatchEvent(

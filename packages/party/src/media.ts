@@ -1,3 +1,4 @@
+import { CORS_HEADERS, corsResponse } from './cors.js';
 import type { Env } from './env.js';
 
 /**
@@ -84,20 +85,6 @@ export async function verifyUploadToken(
 
   if (typeof payload.exp !== 'number' || payload.exp < Date.now()) return null;
   return payload;
-}
-
-/**
- * Media is served/uploaded cross-origin from `player-app` (a different dev
- * port, and a different domain in production), and the upload token in the
- * URL is the sole auth check — there's no session/cookie trust boundary a
- * stricter origin allowlist would protect, so a wildcard is fine here.
- */
-const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*' };
-
-function corsResponse(body: BodyInit | null, init: ResponseInit = {}): Response {
-  const headers = new Headers(init.headers);
-  for (const [key, value] of Object.entries(CORS_HEADERS)) headers.set(key, value);
-  return new Response(body, { ...init, headers });
 }
 
 /** Handles the CORS preflight for `PUT /media/upload`, triggered by its Content-Type header. */
