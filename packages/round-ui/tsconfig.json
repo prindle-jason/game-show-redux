@@ -7,6 +7,6 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx"
   },
-  "references": [{ "path": "../schema" }],
+  "references": [{ "path": "../schema" }, { "path": "../ui" }],
   "include": ["src"]
 }

@@ -14,6 +14,7 @@
   "dependencies": {
     "@gameshow/round-ui": "workspace:*",
     "@gameshow/schema": "workspace:*",
+    "@gameshow/ui": "workspace:*",
     "jszip": "^3.10.1",
     "partysocket": "^1.3.0",
     "react": "^19.2.8",
@@ -21,6 +22,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^26.2.0",
@@ -28,6 +30,7 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
     "jsdom": "^30.0.1",
+    "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.10",

@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@import "@fontsource/barlow-condensed/400.css";
+@import "@fontsource/barlow-condensed/600.css";
+@import "@fontsource/audiowide/400.css";
+
+/*
+ * Tailwind v4's automatic content detection skips node_modules, and pnpm
+ * workspaces only expose round-ui/ui to the apps via symlinked node_modules
+ * entries — without these, classes used inside round-ui's .tsx files and
+ * inside this package's own Button/Field would never reach the generated CSS.
+ */
+@source "./";
+@source "../../round-ui/src";
+
+@theme {
+  --color-surface-0: #090412;
+  --color-surface-1: #130a24;
+  --color-surface-2: #1c1236;
+  --color-surface-3: #241944;
+
+  --color-strong: #f8f4ff;
+  --color-muted: #c7bcd9;
+
+  --color-primary: #ff4fa3;
+  --color-primary-soft: color-mix(in srgb, #ff4fa3 22%, transparent);
+  --color-secondary: #8b5cff;
+  --color-secondary-soft: color-mix(in srgb, #8b5cff 22%, transparent);
+  --color-success: #3fd7ff;
+  --color-success-soft: color-mix(in srgb, #3fd7ff 22%, transparent);
+  --color-danger: #ff6b7a;
+  --color-danger-soft: color-mix(in srgb, #ff6b7a 22%, transparent);
+  --color-accent: #ffc857;
+  --color-accent-soft: color-mix(in srgb, #ffc857 22%, transparent);
+
+  --color-border: color-mix(in srgb, var(--color-strong) 12%, transparent);
+
+  --shadow-glow-primary: 0 0 16px 2px color-mix(in srgb, var(--color-primary) 55%, transparent);
+  --shadow-glow-secondary: 0 0 16px 2px color-mix(in srgb, var(--color-secondary) 55%, transparent);
+  --shadow-glow-danger: 0 0 16px 2px color-mix(in srgb, var(--color-danger) 55%, transparent);
+  --shadow-glow-success: 0 0 16px 2px color-mix(in srgb, var(--color-success) 55%, transparent);
+  --shadow-glow-accent: 0 0 16px 2px color-mix(in srgb, var(--color-accent) 55%, transparent);
+
+  --font-sans: "Barlow Condensed", sans-serif;
+  --font-display: "Audiowide", sans-serif;
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 12px color-mix(in srgb, currentColor 70%, transparent);
+  }
+}
+
+body {
+  background-color: var(--color-surface-0);
+  color: var(--color-strong);
+  font-family: var(--font-sans);
+}

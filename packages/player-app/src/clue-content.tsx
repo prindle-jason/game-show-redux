@@ -1,4 +1,5 @@
 import type { ResolvedClueContent, ResolvedMediaRef } from '@gameshow/schema';
+import { Button } from '@gameshow/ui';
 import { useState } from 'react';
 
 export function mediaUrlsFor(ref: ResolvedMediaRef | undefined): string[] {
@@ -30,21 +31,27 @@ function Slideshow({
   const navigate = onNavigate ?? setLocalIndex;
 
   return (
-    <div>
-      {url && <img src={url} alt="" />}
+    <div className="flex flex-col items-center gap-2">
+      {url && <img src={url} alt="" className="max-h-64 rounded-md border border-border" />}
       {interactive && (
-        <>
-          <button type="button" disabled={current === 0} onClick={() => navigate(current - 1)}>
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={current === 0}
+            onClick={() => navigate(current - 1)}
+          >
             Previous
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={current === urls.length - 1}
             onClick={() => navigate(current + 1)}
           >
             Next
-          </button>
-        </>
+          </Button>
+        </div>
       )}
     </div>
   );
@@ -61,13 +68,15 @@ function MediaRenderer({
 }) {
   switch (media.kind) {
     case 'image':
-      return <img src={media.url} alt="" />;
+      return <img src={media.url} alt="" className="max-h-64 rounded-md border border-border" />;
     case 'audio':
       // biome-ignore lint/a11y/useMediaCaption: uploaded media has no caption track
-      return <audio controls src={media.url} />;
+      return <audio controls src={media.url} className="w-full" />;
     case 'video':
-      // biome-ignore lint/a11y/useMediaCaption: uploaded media has no caption track
-      return <video controls src={media.url} />;
+      return (
+        // biome-ignore lint/a11y/useMediaCaption: uploaded media has no caption track
+        <video controls src={media.url} className="max-h-64 rounded-md border border-border" />
+      );
     case 'slideshow':
       return <Slideshow urls={media.urls} index={slideIndex} onNavigate={onSlideNavigate} />;
   }
@@ -84,7 +93,7 @@ export function ClueContentView({
 }) {
   return (
     <>
-      {content.text && <span>{content.text}</span>}
+      {content.text && <span className="text-strong">{content.text}</span>}
       {content.media && (
         <MediaRenderer
           media={content.media}

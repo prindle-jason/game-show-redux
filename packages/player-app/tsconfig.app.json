@@ -8,6 +8,6 @@
     "jsx": "react-jsx",
     "types": ["vite/client"]
   },
-  "references": [{ "path": "../schema" }, { "path": "../round-ui" }],
+  "references": [{ "path": "../schema" }, { "path": "../round-ui" }, { "path": "../ui" }],
   "include": ["src"]
 }

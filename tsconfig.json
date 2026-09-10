@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "./packages/schema" },
+    { "path": "./packages/ui" },
     { "path": "./packages/round-ui" },
     { "path": "./packages/party" },
     { "path": "./packages/builder-app" },

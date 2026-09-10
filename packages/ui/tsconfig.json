@@ -5,9 +5,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "jsx": "react-jsx",
-    "types": ["vite/client"]
+    "jsx": "react-jsx"
   },
-  "references": [{ "path": "../schema" }, { "path": "../round-ui" }, { "path": "../ui" }],
   "include": ["src"]
 }

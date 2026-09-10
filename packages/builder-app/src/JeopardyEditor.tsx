@@ -1,4 +1,5 @@
 import { JeopardyBoardGrid } from '@gameshow/round-ui';
+import { Button, Field } from '@gameshow/ui';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { downloadRoundZip } from './export-round.js';
@@ -55,72 +56,83 @@ export function JeopardyEditor() {
   }
 
   return (
-    <div>
-      <Link to="/">← Back to round types</Link>
-      <p>Round id: {draft.roundId}</p>
-      <label>
-        Title
-        <input value={draft.title} onChange={(event) => setTitle(event.target.value)} />
-      </label>
+    <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-8">
+      <Link to="/" className="text-muted hover:text-strong">
+        ← Back to round types
+      </Link>
+      <p className="text-muted">Round id: {draft.roundId}</p>
+      <Field label="Title" value={draft.title} onChange={(event) => setTitle(event.target.value)} />
 
-      <h2>Board</h2>
-      <button type="button" onClick={applyDefaultBoard}>
-        Default board
-      </button>
-      <button type="button" onClick={addCategory}>
-        Add category
-      </button>
+      <div className="flex flex-col gap-3">
+        <h2 className="font-display text-lg text-strong">Board</h2>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={applyDefaultBoard}>
+            Default board
+          </Button>
+          <Button variant="secondary" onClick={addCategory}>
+            Add category
+          </Button>
+        </div>
 
-      {draft.categories.length > 0 && (
-        <JeopardyBoardGrid
-          categoryNames={draft.categories.map((category) => category.name)}
-          rowCount={rowCount}
-          renderHeader={(categoryIndex, name) => (
-            <div>
-              <input
-                aria-label={`Category ${categoryIndex + 1} name`}
-                value={name}
-                onChange={(event) => setCategoryName(categoryIndex, event.target.value)}
-              />
-              <button type="button" onClick={() => removeCategory(categoryIndex)}>
-                Remove category
-              </button>
-            </div>
-          )}
-          renderCell={(categoryIndex, clueIndex) => {
-            const category = draft.categories[categoryIndex];
-            const clue = category?.clues[clueIndex];
-            if (clue) {
-              return (
-                <button type="button" onClick={() => setSelectedClue({ categoryIndex, clueIndex })}>
-                  {clue.isDailyDouble ? `${clue.value} (DD)` : clue.value}
-                </button>
-              );
-            }
-            if (category && clueIndex === category.clues.length) {
-              return (
-                <button
-                  type="button"
-                  onClick={() => {
-                    addClue(categoryIndex);
-                    setSelectedClue({ categoryIndex, clueIndex });
-                  }}
-                >
-                  Add clue
-                </button>
-              );
-            }
-            return null;
-          }}
-        />
-      )}
+        {draft.categories.length > 0 && (
+          <JeopardyBoardGrid
+            categoryNames={draft.categories.map((category) => category.name)}
+            rowCount={rowCount}
+            renderHeader={(categoryIndex, name) => (
+              <div className="flex flex-col gap-1">
+                <input
+                  aria-label={`Category ${categoryIndex + 1} name`}
+                  value={name}
+                  onChange={(event) => setCategoryName(categoryIndex, event.target.value)}
+                  className="rounded-md border border-border bg-surface-1 px-2 py-1 text-sm text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+                <Button variant="danger" size="sm" onClick={() => removeCategory(categoryIndex)}>
+                  Remove category
+                </Button>
+              </div>
+            )}
+            renderCell={(categoryIndex, clueIndex) => {
+              const category = draft.categories[categoryIndex];
+              const clue = category?.clues[clueIndex];
+              if (clue) {
+                return (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setSelectedClue({ categoryIndex, clueIndex })}
+                  >
+                    {clue.isDailyDouble ? `${clue.value} (DD)` : clue.value}
+                  </Button>
+                );
+              }
+              if (category && clueIndex === category.clues.length) {
+                return (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      addClue(categoryIndex);
+                      setSelectedClue({ categoryIndex, clueIndex });
+                    }}
+                  >
+                    Add clue
+                  </Button>
+                );
+              }
+              return null;
+            }}
+          />
+        )}
+      </div>
 
       {selected && selectedClue && (
-        <div>
-          <h2>Edit clue</h2>
-          <label>
-            Value
-            <input
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-1 p-4">
+          <h2 className="font-display text-lg text-strong">Edit clue</h2>
+          <div className="flex items-end gap-4">
+            <Field
+              label="Value"
               type="number"
               value={selected.value}
               onChange={(event) =>
@@ -131,26 +143,27 @@ export function JeopardyEditor() {
                 )
               }
             />
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={selected.isDailyDouble}
-              onChange={() => toggleDailyDouble(selectedClue.categoryIndex, selectedClue.clueIndex)}
-            />
-            Daily Double
-          </label>
+            <label className="flex items-center gap-2 pb-2 text-strong">
+              <input
+                type="checkbox"
+                checked={selected.isDailyDouble}
+                onChange={() =>
+                  toggleDailyDouble(selectedClue.categoryIndex, selectedClue.clueIndex)
+                }
+                className="accent-primary"
+              />
+              Daily Double
+            </label>
+          </div>
 
-          <h3>Clue</h3>
-          <label>
-            Clue text
-            <input
-              value={selected.clueText}
-              onChange={(event) =>
-                setClueText(selectedClue.categoryIndex, selectedClue.clueIndex, event.target.value)
-              }
-            />
-          </label>
+          <h3 className="font-display text-base text-strong">Clue</h3>
+          <Field
+            label="Clue text"
+            value={selected.clueText}
+            onChange={(event) =>
+              setClueText(selectedClue.categoryIndex, selectedClue.clueIndex, event.target.value)
+            }
+          />
           <MediaField
             label="Clue media"
             media={selected.clueMedia}
@@ -161,20 +174,14 @@ export function JeopardyEditor() {
             }
           />
 
-          <h3>Answer</h3>
-          <label>
-            Answer text
-            <input
-              value={selected.answerText}
-              onChange={(event) =>
-                setAnswerText(
-                  selectedClue.categoryIndex,
-                  selectedClue.clueIndex,
-                  event.target.value,
-                )
-              }
-            />
-          </label>
+          <h3 className="font-display text-base text-strong">Answer</h3>
+          <Field
+            label="Answer text"
+            value={selected.answerText}
+            onChange={(event) =>
+              setAnswerText(selectedClue.categoryIndex, selectedClue.clueIndex, event.target.value)
+            }
+          />
           <MediaField
             label="Answer media"
             media={selected.answerMedia}
@@ -185,30 +192,36 @@ export function JeopardyEditor() {
             }
           />
 
-          <button
-            type="button"
-            onClick={() => {
-              removeClue(selectedClue.categoryIndex, selectedClue.clueIndex);
-              setSelectedClue(null);
-            }}
-          >
-            Remove clue
-          </button>
-          <button type="button" onClick={() => setSelectedClue(null)}>
-            Close
-          </button>
+          <div className="flex gap-2">
+            <Button
+              variant="danger"
+              onClick={() => {
+                removeClue(selectedClue.categoryIndex, selectedClue.clueIndex);
+                setSelectedClue(null);
+              }}
+            >
+              Remove clue
+            </Button>
+            <Button variant="ghost" onClick={() => setSelectedClue(null)}>
+              Close
+            </Button>
+          </div>
         </div>
       )}
 
-      <div>
-        <button
-          type="button"
+      <div className="flex flex-col gap-2">
+        <Button
           disabled={!validation.valid || exporting}
+          className="self-start"
           onClick={() => void handleExport(draft)}
         >
           {exporting ? 'Exporting…' : 'Export round'}
-        </button>
-        {!validation.valid && <p role="alert">{validation.error}</p>}
+        </Button>
+        {!validation.valid && (
+          <p role="alert" className="text-sm text-danger">
+            {validation.error}
+          </p>
+        )}
       </div>
     </div>
   );

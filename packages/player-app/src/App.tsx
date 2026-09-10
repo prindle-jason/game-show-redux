@@ -1,4 +1,5 @@
 import { SCHEMA_PACKAGE_NAME } from '@gameshow/schema';
+import { Button, Field } from '@gameshow/ui';
 import { useState } from 'react';
 import { createRoom } from './create-room.js';
 import {
@@ -26,20 +27,18 @@ function LinkJoinForm({ roomCode }: { roomCode: string }) {
 
   return (
     <form
+      className="mx-auto flex max-w-sm flex-col gap-4 rounded-lg border border-border bg-surface-1 p-6"
       onSubmit={(event) => {
         event.preventDefault();
         if (!name.trim()) return;
         join(roomCode, name.trim());
       }}
     >
-      <p>Room code: {roomCode}</p>
-      <label>
-        Name
-        <input value={name} onChange={(event) => setName(event.target.value)} />
-      </label>
-      <button type="submit" disabled={status === 'connecting' || status === 'connected'}>
+      <p className="text-muted">Room code: {roomCode}</p>
+      <Field label="Name" value={name} onChange={(event) => setName(event.target.value)} />
+      <Button type="submit" disabled={status === 'connecting' || status === 'connected'}>
         Join
-      </button>
+      </Button>
     </form>
   );
 }
@@ -67,29 +66,32 @@ function CreateOrJoinForm() {
   }
 
   return (
-    <div>
-      <label>
-        Name
-        <input value={name} onChange={(event) => setName(event.target.value)} />
-      </label>
-      <button type="button" disabled={busy || creating} onClick={() => void handleCreateRoom()}>
+    <div className="mx-auto flex max-w-sm flex-col gap-4 rounded-lg border border-border bg-surface-1 p-6">
+      <Field label="Name" value={name} onChange={(event) => setName(event.target.value)} />
+      <Button disabled={busy || creating} onClick={() => void handleCreateRoom()}>
         {creating ? 'Creating…' : 'Create room'}
-      </button>
-      {createError && <p role="alert">{createError}</p>}
+      </Button>
+      {createError && (
+        <p role="alert" className="text-sm text-danger">
+          {createError}
+        </p>
+      )}
       <form
+        className="flex flex-col gap-4 border-t border-border pt-4"
         onSubmit={(event) => {
           event.preventDefault();
           if (!roomCode.trim() || !name.trim()) return;
           join(roomCode.trim(), name.trim());
         }}
       >
-        <label>
-          Room code
-          <input value={roomCode} onChange={(event) => setRoomCode(event.target.value)} />
-        </label>
-        <button type="submit" disabled={busy}>
+        <Field
+          label="Room code"
+          value={roomCode}
+          onChange={(event) => setRoomCode(event.target.value)}
+        />
+        <Button type="submit" variant="secondary" disabled={busy}>
           Join room
-        </button>
+        </Button>
       </form>
     </div>
   );
@@ -122,20 +124,25 @@ function QueueEntryRow({
   }
 
   return (
-    <li>
-      {entry.round ? entry.round.title : 'Upcoming round'} — {entry.status}
-      <button type="button" onClick={() => moveBy(-1)}>
-        Move up
-      </button>
-      <button type="button" onClick={() => moveBy(1)}>
-        Move down
-      </button>
-      <button
-        type="button"
-        onClick={() => send({ type: 'remove-from-queue', queueEntryId: entry.queueEntryId })}
-      >
-        Remove
-      </button>
+    <li className="flex items-center justify-between gap-2 border-b border-border py-2">
+      <span>
+        {entry.round ? entry.round.title : 'Upcoming round'} — {entry.status}
+      </span>
+      <span className="flex gap-1">
+        <Button variant="ghost" size="sm" onClick={() => moveBy(-1)}>
+          Move up
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => moveBy(1)}>
+          Move down
+        </Button>
+        <Button
+          variant="danger"
+          size="sm"
+          onClick={() => send({ type: 'remove-from-queue', queueEntryId: entry.queueEntryId })}
+        >
+          Remove
+        </Button>
+      </span>
     </li>
   );
 }
@@ -152,18 +159,30 @@ function PlayerRow({
   const send = useRoomStore((state) => state.send);
 
   return (
-    <li>
-      {player.name} — {player.score} {player.connected ? '' : '(disconnected)'}
-      {canMakeHost && (
-        <button type="button" onClick={() => send({ type: 'make-host', playerId: player.id })}>
-          Make host
-        </button>
-      )}
-      {canKick && (
-        <button type="button" onClick={() => send({ type: 'kick-player', playerId: player.id })}>
-          Kick
-        </button>
-      )}
+    <li className="flex items-center justify-between gap-2 border-b border-border py-2">
+      <span>
+        {player.name} — {player.score} {player.connected ? '' : '(disconnected)'}
+      </span>
+      <span className="flex gap-1">
+        {canMakeHost && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => send({ type: 'make-host', playerId: player.id })}
+          >
+            Make host
+          </Button>
+        )}
+        {canKick && (
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => send({ type: 'kick-player', playerId: player.id })}
+          >
+            Kick
+          </Button>
+        )}
+      </span>
     </li>
   );
 }
@@ -228,60 +247,58 @@ function HostControls({ phase, queueIds }: { phase: string; queueIds: string[] }
   }
 
   return (
-    <div>
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-1 p-4">
       {phase === 'lobby' && (
         <>
-          <button type="button" disabled={uploading} onClick={() => void addFixtureRound()}>
-            {uploading ? 'Uploading…' : 'Add fixture round'}
-          </button>
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => void addFinalJeopardyFixtureRound()}
-          >
-            {uploading ? 'Uploading…' : 'Add Final Jeopardy fixture round'}
-          </button>
-          <button
-            type="button"
-            onClick={() => send({ type: 'add-round-to-queue', round: createWheelFixtureRound() })}
-          >
-            Add Wheel fixture round
-          </button>
-          <label>
-            Import round
-            <input
-              type="file"
-              accept=".zip"
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" disabled={uploading} onClick={() => void addFixtureRound()}>
+              {uploading ? 'Uploading…' : 'Add fixture round'}
+            </Button>
+            <Button
+              variant="secondary"
               disabled={uploading}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = '';
-                if (file) void importRoundFile(file);
-              }}
-            />
-          </label>
-          {importError && <p role="alert">{importError}</p>}
-          <button
-            type="button"
-            disabled={queueIds.length === 0}
-            onClick={() => send({ type: 'start-game' })}
-          >
-            Start game
-          </button>
-          <button type="button" onClick={() => send({ type: 'reset-scores' })}>
-            Reset scores
-          </button>
+              onClick={() => void addFinalJeopardyFixtureRound()}
+            >
+              {uploading ? 'Uploading…' : 'Add Final Jeopardy fixture round'}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => send({ type: 'add-round-to-queue', round: createWheelFixtureRound() })}
+            >
+              Add Wheel fixture round
+            </Button>
+          </div>
+          <Field
+            label="Import round"
+            type="file"
+            accept=".zip"
+            disabled={uploading}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) void importRoundFile(file);
+            }}
+          />
+          {importError && (
+            <p role="alert" className="text-sm text-danger">
+              {importError}
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button disabled={queueIds.length === 0} onClick={() => send({ type: 'start-game' })}>
+              Start game
+            </Button>
+            <Button variant="danger" onClick={() => send({ type: 'reset-scores' })}>
+              Reset scores
+            </Button>
+          </div>
         </>
       )}
       {phase === 'playing' && (
-        <button type="button" onClick={() => send({ type: 'advance-queue' })}>
-          Advance queue
-        </button>
+        <Button onClick={() => send({ type: 'advance-queue' })}>Advance queue</Button>
       )}
       {phase === 'ended' && (
-        <button type="button" onClick={() => send({ type: 'return-to-lobby' })}>
-          Return to lobby
-        </button>
+        <Button onClick={() => send({ type: 'return-to-lobby' })}>Return to lobby</Button>
       )}
     </div>
   );
@@ -295,7 +312,7 @@ function ConnectedRoom() {
   const [linkCopied, setLinkCopied] = useState(false);
 
   if (!view || !self) {
-    return <p>Connecting…</p>;
+    return <p className="text-muted">Connecting…</p>;
   }
 
   const isHost = view.hostId === self.playerId;
@@ -303,47 +320,68 @@ function ConnectedRoom() {
   const Board = view.activeRoundState ? roundBoards[view.activeRoundState.type] : undefined;
 
   return (
-    <div>
-      <p>Room code: {roomCode}</p>
-      <p>Phase: {view.phase}</p>
-      {error && <p role="alert">{error}</p>}
-      {isHost && (
-        <button
-          type="button"
-          onClick={() => {
-            void navigator.clipboard
-              .writeText(`${window.location.origin}?room=${roomCode}`)
-              .then(() => setLinkCopied(true));
-          }}
-        >
-          {linkCopied ? 'Copied!' : 'Copy join link'}
-        </button>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-muted">Room code: {roomCode}</p>
+          <p className="text-muted">Phase: {view.phase}</p>
+        </div>
+        {isHost && (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              void navigator.clipboard
+                .writeText(`${window.location.origin}?room=${roomCode}`)
+                .then(() => setLinkCopied(true));
+            }}
+          >
+            {linkCopied ? 'Copied!' : 'Copy join link'}
+          </Button>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
       )}
-      <h2>Players</h2>
-      <ul aria-label="Players">
-        {view.players.map((player) => (
-          <PlayerRow
-            key={player.id}
-            player={player}
-            canKick={isHost && view.phase === 'lobby' && player.id !== self.playerId}
-            canMakeHost={isHost && view.phase === 'lobby' && player.id !== self.playerId}
-          />
-        ))}
-      </ul>
-      <h2>Queue</h2>
-      <ul>
-        {view.queue.map((entry, index) => (
-          <QueueEntryRow key={entry.queueEntryId} entry={entry} index={index} queueIds={queueIds} />
-        ))}
-      </ul>
+      <div>
+        <h2 className="font-display text-lg text-strong">Players</h2>
+        <ul aria-label="Players">
+          {view.players.map((player) => (
+            <PlayerRow
+              key={player.id}
+              player={player}
+              canKick={isHost && view.phase === 'lobby' && player.id !== self.playerId}
+              canMakeHost={isHost && view.phase === 'lobby' && player.id !== self.playerId}
+            />
+          ))}
+        </ul>
+      </div>
+      <div>
+        <h2 className="font-display text-lg text-strong">Queue</h2>
+        <ul>
+          {view.queue.map((entry, index) => (
+            <QueueEntryRow
+              key={entry.queueEntryId}
+              entry={entry}
+              index={index}
+              queueIds={queueIds}
+            />
+          ))}
+        </ul>
+      </div>
       {isHost && <HostControls phase={view.phase} queueIds={queueIds} />}
-      {view.phase === 'playing' && view.roundComplete && <p>Round complete</p>}
+      {view.phase === 'playing' && view.roundComplete && (
+        <p className="text-muted">Round complete</p>
+      )}
       {Board ? (
         <Board view={view} playerId={self.playerId} isHost={isHost} />
       ) : (
         <>
-          <h2>Raw state</h2>
-          <pre>{JSON.stringify(view, null, 2)}</pre>
+          <h2 className="font-display text-lg text-strong">Raw state</h2>
+          <pre className="overflow-auto rounded-lg border border-border bg-surface-1 p-3 text-xs">
+            {JSON.stringify(view, null, 2)}
+          </pre>
         </>
       )}
     </div>
@@ -354,9 +392,9 @@ export function App() {
   const status = useRoomStore((state) => state.status);
 
   return (
-    <main>
-      <h1>Quiz Show</h1>
-      <p>Minimal stub, wired against {SCHEMA_PACKAGE_NAME}.</p>
+    <main className="mx-auto min-h-screen max-w-3xl px-4 py-8">
+      <h1 className="font-display text-3xl text-glow text-primary">Quiz Show</h1>
+      <p className="mb-6 text-muted">Minimal stub, wired against {SCHEMA_PACKAGE_NAME}.</p>
       {status === 'connected' ? <ConnectedRoom /> : <JoinForm />}
     </main>
   );

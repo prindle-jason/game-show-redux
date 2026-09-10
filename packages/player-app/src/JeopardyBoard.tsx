@@ -8,6 +8,7 @@ import type {
   QueueEntryStatus,
   ResolvedClueContent,
 } from '@gameshow/schema';
+import { Button, Field } from '@gameshow/ui';
 import { useEffect, useRef, useState } from 'react';
 import { ClueContentView, mediaUrlsFor } from './clue-content.js';
 import { useRoomStore } from './room-store.js';
@@ -79,16 +80,16 @@ function MediaWaitingPanel({ view }: { view: HostRoomView }) {
   );
 
   return (
-    <div>
-      <p>Waiting for players to finish loading media…</p>
+    <div className="flex flex-col gap-2">
+      <p className="text-muted">Waiting for players to finish loading media…</p>
       <ul>
         {waitingOn.map((player) => (
           <li key={player.id}>{player.name}</li>
         ))}
       </ul>
-      <button type="button" onClick={() => send({ type: 'reveal-media-anyway' })}>
+      <Button variant="secondary" onClick={() => send({ type: 'reveal-media-anyway' })}>
         Reveal anyway
-      </button>
+      </Button>
     </div>
   );
 }
@@ -128,8 +129,8 @@ function HostJeopardyBoard({ view }: { view: HostRoomView }) {
   const rows = boardRowCount(data);
 
   return (
-    <div>
-      <h2>Jeopardy board (host)</h2>
+    <div className="flex flex-col gap-4">
+      <h2 className="font-display text-lg text-strong">Jeopardy board (host)</h2>
       <JeopardyBoardGrid
         categoryNames={data.categories.map((category) => category.name)}
         rowCount={rows}
@@ -141,8 +142,9 @@ function HostJeopardyBoard({ view }: { view: HostRoomView }) {
           );
           if (revealed) return '—';
           return (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              className="w-full"
               disabled={state.activeClue !== null}
               onClick={() =>
                 send({
@@ -152,14 +154,14 @@ function HostJeopardyBoard({ view }: { view: HostRoomView }) {
               }
             >
               {clue.value}
-            </button>
+            </Button>
           );
         }}
       />
 
       {activeClue && state.activeClue && (
-        <div>
-          <p>
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-1 p-4">
+          <p className="text-strong">
             Clue:{' '}
             <ClueContentView
               content={activeClue.clue}
@@ -169,42 +171,43 @@ function HostJeopardyBoard({ view }: { view: HostRoomView }) {
               }
             />
           </p>
-          <p>
+          <p className="text-strong">
             Answer: <ClueContentView content={activeClue.answer} />
           </p>
           {activeClue.isDailyDouble && (
-            <p>
+            <p className="text-accent">
               Daily Double —{' '}
               {state.pendingWager !== null ? `wager: ${state.pendingWager}` : 'awaiting wager'}
             </p>
           )}
           {!state.buzzedPlayerId && (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={() => send({ type: 'round-action', action: { type: 'skip-clue' } })}
             >
               Skip clue
-            </button>
+            </Button>
           )}
           {state.buzzedPlayerId && (
-            <div>
-              <p>Answering: {state.buzzedPlayerId}</p>
-              <button
-                type="button"
-                onClick={() =>
-                  send({ type: 'round-action', action: { type: 'judge', correct: true } })
-                }
-              >
-                Correct
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  send({ type: 'round-action', action: { type: 'judge', correct: false } })
-                }
-              >
-                Incorrect
-              </button>
+            <div className="flex flex-col gap-2">
+              <p className="text-muted">Answering: {state.buzzedPlayerId}</p>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() =>
+                    send({ type: 'round-action', action: { type: 'judge', correct: true } })
+                  }
+                >
+                  Correct
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() =>
+                    send({ type: 'round-action', action: { type: 'judge', correct: false } })
+                  }
+                >
+                  Incorrect
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -245,16 +248,16 @@ function ContestantJeopardyBoard({
 
   if (status === 'loading') {
     return (
-      <div>
-        <h2>Jeopardy board</h2>
-        <p>Loading media…</p>
+      <div className="flex flex-col gap-2">
+        <h2 className="font-display text-lg text-strong">Jeopardy board</h2>
+        <p className="text-muted">Loading media…</p>
       </div>
     );
   }
 
   return (
-    <div>
-      <h2>Jeopardy board</h2>
+    <div className="flex flex-col gap-4">
+      <h2 className="font-display text-lg text-strong">Jeopardy board</h2>
       <JeopardyBoardGrid
         categoryNames={roundState.categories.map((category) => category.name)}
         rowCount={rows}
@@ -265,25 +268,26 @@ function ContestantJeopardyBoard({
       />
 
       {roundState.activeClue && (
-        <div>
-          <p>
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-1 p-4">
+          <p className="text-strong">
             Clue:{' '}
             <ClueContentView
               content={roundState.activeClue.clue}
               slideIndex={roundState.activeClue.clueSlideIndex}
             />
           </p>
-          {isLockedOut && <p>You're locked out of this clue.</p>}
+          {isLockedOut && <p className="text-muted">You're locked out of this clue.</p>}
           {canBuzz && (
-            <button
-              type="button"
+            <Button
+              size="lg"
               onClick={() => send({ type: 'round-action', action: { type: 'buzz' } })}
             >
               Buzz
-            </button>
+            </Button>
           )}
           {canWager && (
             <form
+              className="flex items-end gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
                 const amount = Number(wagerAmount);
@@ -291,14 +295,12 @@ function ContestantJeopardyBoard({
                 send({ type: 'round-action', action: { type: 'wager', amount } });
               }}
             >
-              <label>
-                Wager
-                <input
-                  value={wagerAmount}
-                  onChange={(event) => setWagerAmount(event.target.value)}
-                />
-              </label>
-              <button type="submit">Submit wager</button>
+              <Field
+                label="Wager"
+                value={wagerAmount}
+                onChange={(event) => setWagerAmount(event.target.value)}
+              />
+              <Button type="submit">Submit wager</Button>
             </form>
           )}
         </div>

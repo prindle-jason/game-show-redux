@@ -1,4 +1,5 @@
 import type { MediaRef } from '@gameshow/schema';
+import { Button, Field } from '@gameshow/ui';
 import { useEffect, useState } from 'react';
 import type { AssetTable } from './media-assets.js';
 
@@ -20,11 +21,12 @@ function FilePreview({ file, kind }: { file: File; kind: 'image' | 'audio' | 'vi
   }, [file]);
 
   if (!url) return null;
-  if (kind === 'image') return <img src={url} alt="" />;
+  if (kind === 'image')
+    return <img src={url} alt="" className="max-h-40 rounded-md border border-border" />;
   // biome-ignore lint/a11y/useMediaCaption: attached media has no caption track
-  if (kind === 'audio') return <audio controls src={url} />;
+  if (kind === 'audio') return <audio controls src={url} className="w-full" />;
   // biome-ignore lint/a11y/useMediaCaption: attached media has no caption track
-  return <video controls src={url} />;
+  return <video controls src={url} className="max-h-40 rounded-md border border-border" />;
 }
 
 /**
@@ -83,11 +85,10 @@ export function MediaField({
   }
 
   return (
-    <div>
-      <p>{label}</p>
+    <div className="flex flex-col gap-2">
       {!media && (
-        <input
-          aria-label={label}
+        <Field
+          label={label}
           type="file"
           accept="image/*,audio/*,video/*"
           multiple
@@ -95,37 +96,49 @@ export function MediaField({
         />
       )}
       {media && media.kind !== 'slideshow' && (
-        <div>
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-sm font-medium text-muted">{label}</p>
           {assets[media.assetId] && (
             <FilePreview file={assets[media.assetId] as File} kind={media.kind} />
           )}
-          <button type="button" onClick={() => onChange(undefined)}>
+          <Button
+            variant="danger"
+            size="sm"
+            className="self-start"
+            onClick={() => onChange(undefined)}
+          >
             Remove media
-          </button>
+          </Button>
         </div>
       )}
       {media && media.kind === 'slideshow' && (
-        <div>
-          <ul>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium text-muted">{label}</p>
+          <ul className="flex flex-wrap gap-2">
             {media.assetIds.map((assetId, index) => (
-              <li key={assetId}>
+              <li key={assetId} className="flex flex-col items-start gap-1">
                 {assets[assetId] && <FilePreview file={assets[assetId] as File} kind="image" />}
-                <button type="button" onClick={() => handleRemoveSlide(index)}>
+                <Button variant="danger" size="sm" onClick={() => handleRemoveSlide(index)}>
                   Remove slide
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
-          <input
-            aria-label={`${label} — add slide`}
+          <Field
+            label={`${label} — add slide`}
             type="file"
             accept="image/*"
             multiple
             onChange={(event) => handleAddSlide(event.target.files)}
           />
-          <button type="button" onClick={() => onChange(undefined)}>
+          <Button
+            variant="danger"
+            size="sm"
+            className="self-start"
+            onClick={() => onChange(undefined)}
+          >
             Remove media
-          </button>
+          </Button>
         </div>
       )}
     </div>

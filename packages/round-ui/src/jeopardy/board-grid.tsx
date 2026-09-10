@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
 
+const headerCellClassName =
+  'border border-border bg-surface-2 p-2 font-display text-sm text-strong';
+
 /**
  * Layout-only grid shell shared by the live host/contestant boards and the
  * builder editor — behavior (click handling, revealed/active state, edit
@@ -18,12 +21,14 @@ export function JeopardyBoardGrid({
   renderHeader?: (categoryIndex: number, name: string) => ReactNode;
 }) {
   return (
-    <table>
+    <table className="w-full border-collapse">
       <thead>
         <tr>
           {categoryNames.map((name, categoryIndex) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: category names may be blank/duplicate mid-edit; position is the only stable identity
-            <th key={categoryIndex}>{renderHeader ? renderHeader(categoryIndex, name) : name}</th>
+            <th key={categoryIndex} className={headerCellClassName}>
+              {renderHeader ? renderHeader(categoryIndex, name) : name}
+            </th>
           ))}
         </tr>
       </thead>
@@ -33,7 +38,9 @@ export function JeopardyBoardGrid({
           <tr key={`row-${clueIndex}`}>
             {categoryNames.map((_, categoryIndex) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: cell identity is position, not content
-              <td key={categoryIndex}>{renderCell(categoryIndex, clueIndex)}</td>
+              <td key={categoryIndex} className="border border-border bg-surface-1 p-2 text-center">
+                {renderCell(categoryIndex, clueIndex)}
+              </td>
             ))}
           </tr>
         ))}
