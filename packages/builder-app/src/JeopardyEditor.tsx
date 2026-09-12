@@ -1,5 +1,5 @@
 import { JeopardyBoardGrid } from '@gameshow/round-ui';
-import { Button, Field } from '@gameshow/ui';
+import { Button, InputField } from '@gameshow/ui';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { downloadRoundZip } from './export-round.js';
@@ -61,7 +61,11 @@ export function JeopardyEditor() {
         ← Back to round types
       </Link>
       <p className="text-muted">Round id: {draft.roundId}</p>
-      <Field label="Title" value={draft.title} onChange={(event) => setTitle(event.target.value)} />
+      <InputField
+        label="Title"
+        value={draft.title}
+        onChange={(event) => setTitle(event.target.value)}
+      />
 
       <div className="flex flex-col gap-3">
         <h2 className="font-display text-lg text-strong">Board</h2>
@@ -131,7 +135,7 @@ export function JeopardyEditor() {
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-1 p-4">
           <h2 className="font-display text-lg text-strong">Edit clue</h2>
           <div className="flex items-end gap-4">
-            <Field
+            <InputField
               label="Value"
               type="number"
               value={selected.value}
@@ -157,7 +161,7 @@ export function JeopardyEditor() {
           </div>
 
           <h3 className="font-display text-base text-strong">Clue</h3>
-          <Field
+          <InputField
             label="Clue text"
             value={selected.clueText}
             onChange={(event) =>
@@ -175,7 +179,7 @@ export function JeopardyEditor() {
           />
 
           <h3 className="font-display text-base text-strong">Answer</h3>
-          <Field
+          <InputField
             label="Answer text"
             value={selected.answerText}
             onChange={(event) =>

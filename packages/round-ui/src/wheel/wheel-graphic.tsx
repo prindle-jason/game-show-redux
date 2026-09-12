@@ -42,7 +42,14 @@ export function WheelGraphic({
   if (wedges.length === 0) {
     return (
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label="Wheel with no wedges yet">
-        <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="none" stroke="currentColor" />
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={RADIUS}
+          fill="none"
+          stroke="currentColor"
+          className="text-border"
+        />
       </svg>
     );
   }
@@ -64,6 +71,7 @@ export function WheelGraphic({
               d={describeSlice(startAngle, endAngle)}
               fill={isHighlighted ? 'currentColor' : 'none'}
               stroke="currentColor"
+              className={isHighlighted ? 'text-primary' : 'text-border'}
             />
             <text
               x={label.x}
@@ -71,6 +79,8 @@ export function WheelGraphic({
               textAnchor="middle"
               dominantBaseline="middle"
               fontSize={12}
+              fill="currentColor"
+              className={`font-display ${isHighlighted ? 'text-surface-0' : 'text-strong'}`}
             >
               {wedgeLabel(wedge)}
             </text>

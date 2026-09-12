@@ -39,7 +39,7 @@ describe('WheelEditor', () => {
   it('reflects solution row edits in the live preview', async () => {
     await renderEditor();
     fireEvent.change(screen.getByLabelText('Row 1'), { target: { value: 'HELLO' } });
-    expect(screen.getByText('HELLO')).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: 'HELLO' })).toBeInTheDocument();
   });
 
   it('disables Export until the draft is valid, then enables it', async () => {

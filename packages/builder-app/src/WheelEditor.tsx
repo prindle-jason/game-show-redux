@@ -1,5 +1,6 @@
 import { SolutionBoard, WheelGraphic } from '@gameshow/round-ui';
 import type { WheelWedge } from '@gameshow/schema';
+import { Button, InputField, SelectField } from '@gameshow/ui';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { downloadRoundZip, exportWheelRound } from './export-round.js';
@@ -13,11 +14,11 @@ function WedgeRow({ wedge, onRemove }: { wedge: WheelWedge; onRemove: () => void
         ? 'Bankrupt'
         : 'Lose a turn';
   return (
-    <li>
-      {label}
-      <button type="button" onClick={onRemove}>
+    <li className="flex items-center justify-between gap-2">
+      <span className="text-strong">{label}</span>
+      <Button variant="danger" size="sm" onClick={onRemove}>
         Remove
-      </button>
+      </Button>
     </li>
   );
 }
@@ -28,33 +29,30 @@ function AddWedgeForm({ onAdd }: { onAdd: (wedge: WheelWedge) => void }) {
 
   return (
     <form
+      className="flex flex-wrap items-end gap-2"
       onSubmit={(event) => {
         event.preventDefault();
         onAdd(kind === 'cash' ? { kind, value } : { kind });
       }}
     >
-      <label>
-        Wedge type
-        <select
-          value={kind}
-          onChange={(event) => setKind(event.target.value as WheelWedge['kind'])}
-        >
-          <option value="cash">Cash</option>
-          <option value="bankrupt">Bankrupt</option>
-          <option value="lose-turn">Lose a turn</option>
-        </select>
-      </label>
+      <SelectField
+        label="Wedge type"
+        value={kind}
+        onChange={(event) => setKind(event.target.value as WheelWedge['kind'])}
+      >
+        <option value="cash">Cash</option>
+        <option value="bankrupt">Bankrupt</option>
+        <option value="lose-turn">Lose a turn</option>
+      </SelectField>
       {kind === 'cash' && (
-        <label>
-          Value
-          <input
-            type="number"
-            value={value}
-            onChange={(event) => setValue(Number(event.target.value))}
-          />
-        </label>
+        <InputField
+          label="Value"
+          type="number"
+          value={value}
+          onChange={(event) => setValue(Number(event.target.value))}
+        />
       )}
-      <button type="submit">Add wedge</button>
+      <Button type="submit">Add wedge</Button>
     </form>
   );
 }
@@ -85,72 +83,106 @@ export function WheelEditor() {
   }
 
   return (
-    <div>
-      <Link to="/">← Back to round types</Link>
-      <p>Round id: {draft.roundId}</p>
-      <label>
-        Title
-        <input value={draft.title} onChange={(event) => setTitle(event.target.value)} />
-      </label>
-      <label>
-        Category
-        <input value={draft.category} onChange={(event) => setCategory(event.target.value)} />
-      </label>
+    <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-8">
+      <Link to="/" className="text-muted hover:text-strong">
+        ← Back to round types
+      </Link>
+      <p className="text-muted">Round id: {draft.roundId}</p>
 
-      <h2>Solution</h2>
-      <div>
-        {draft.solution.map((row, index) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed 4 rows, never reordered/inserted/removed
-          <label key={index}>
-            {`Row ${index + 1}`}
-            <input value={row} onChange={(event) => setSolutionRow(index, event.target.value)} />
-          </label>
-        ))}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="flex flex-col gap-4">
+          <InputField
+            label="Title"
+            value={draft.title}
+            onChange={(event) => setTitle(event.target.value)}
+          />
+          <InputField
+            label="Category"
+            value={draft.category}
+            onChange={(event) => setCategory(event.target.value)}
+          />
+
+          <div className="flex flex-col gap-2">
+            <h2 className="font-display text-lg text-strong">Solution</h2>
+            <div className="flex flex-col gap-2">
+              {draft.solution.map((row, index) => (
+                <InputField
+                  // biome-ignore lint/suspicious/noArrayIndexKey: fixed 4 rows, never reordered/inserted/removed
+                  key={index}
+                  label={`Row ${index + 1}`}
+                  value={row}
+                  onChange={(event) => setSolutionRow(index, event.target.value)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <h2 className="font-display text-lg text-strong">Wedges</h2>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={applyDefaultWedges}>
+                Default
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={draft.wedges.length === 0}
+                onClick={shuffleWedges}
+              >
+                Shuffle
+              </Button>
+            </div>
+            <ul className="flex flex-col gap-2 rounded-lg border border-border bg-surface-1 p-4">
+              {draft.wedges.length === 0 && <li className="text-muted">No wedges yet.</li>}
+              {draft.wedges.map((wedge, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: wedges have no stable id; add/remove/shuffle all replace the whole list
+                <WedgeRow key={index} wedge={wedge} onRemove={() => removeWedge(index)} />
+              ))}
+            </ul>
+            <AddWedgeForm onAdd={addWedge} />
+          </div>
+
+          <div className="flex gap-4">
+            <InputField
+              label="Vowel cost"
+              type="number"
+              value={draft.vowelCost}
+              onChange={(event) => setVowelCost(Number(event.target.value))}
+            />
+            <InputField
+              label="Solve bonus"
+              type="number"
+              value={draft.solveBonus}
+              onChange={(event) => setSolveBonus(Number(event.target.value))}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4 md:sticky md:top-8 md:h-fit md:self-start">
+          <div className="flex flex-col gap-2">
+            <h2 className="font-display text-lg text-strong">Preview</h2>
+            <SolutionBoard rows={draft.solution} />
+          </div>
+          <div className="flex justify-center">
+            <div className="w-full max-w-xs">
+              <WheelGraphic wedges={draft.wedges} />
+            </div>
+          </div>
+        </div>
       </div>
-      <SolutionBoard rows={draft.solution} />
 
-      <h2>Wedges</h2>
-      <button type="button" onClick={applyDefaultWedges}>
-        Default
-      </button>
-      <button type="button" disabled={draft.wedges.length === 0} onClick={shuffleWedges}>
-        Shuffle
-      </button>
-      <ul>
-        {draft.wedges.map((wedge, index) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: wedges have no stable id; add/remove/shuffle all replace the whole list
-          <WedgeRow key={index} wedge={wedge} onRemove={() => removeWedge(index)} />
-        ))}
-      </ul>
-      <AddWedgeForm onAdd={addWedge} />
-      <WheelGraphic wedges={draft.wedges} />
-
-      <label>
-        Vowel cost
-        <input
-          type="number"
-          value={draft.vowelCost}
-          onChange={(event) => setVowelCost(Number(event.target.value))}
-        />
-      </label>
-      <label>
-        Solve bonus
-        <input
-          type="number"
-          value={draft.solveBonus}
-          onChange={(event) => setSolveBonus(Number(event.target.value))}
-        />
-      </label>
-
-      <div>
-        <button
-          type="button"
+      <div className="flex flex-col gap-2">
+        <Button
           disabled={!validation.valid || exporting}
+          className="self-start"
           onClick={() => void handleExport(draft)}
         >
           {exporting ? 'Exporting…' : 'Export round'}
-        </button>
-        {!validation.valid && <p role="alert">{validation.error}</p>}
+        </Button>
+        {!validation.valid && (
+          <p role="alert" className="text-sm text-danger">
+            {validation.error}
+          </p>
+        )}
       </div>
     </div>
   );

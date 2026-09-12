@@ -1,5 +1,5 @@
 import type { MediaRef } from '@gameshow/schema';
-import { Button, Field } from '@gameshow/ui';
+import { Button, InputField } from '@gameshow/ui';
 import { useEffect, useState } from 'react';
 import type { AssetTable } from './media-assets.js';
 
@@ -87,7 +87,7 @@ export function MediaField({
   return (
     <div className="flex flex-col gap-2">
       {!media && (
-        <Field
+        <InputField
           label={label}
           type="file"
           accept="image/*,audio/*,video/*"
@@ -124,7 +124,7 @@ export function MediaField({
               </li>
             ))}
           </ul>
-          <Field
+          <InputField
             label={`${label} — add slide`}
             type="file"
             accept="image/*"

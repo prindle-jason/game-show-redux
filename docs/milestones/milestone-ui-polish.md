@@ -1,6 +1,6 @@
 # Next milestone: shared design system + UI polish pass (shell + Jeopardy)
 
-**Status: Not started.**
+**Status: Complete.**
 
 ## Context
 

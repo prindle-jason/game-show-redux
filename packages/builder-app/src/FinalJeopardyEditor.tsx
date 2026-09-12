@@ -1,3 +1,4 @@
+import { Button, InputField } from '@gameshow/ui';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { downloadRoundZip } from './export-round.js';
@@ -33,60 +34,76 @@ export function FinalJeopardyEditor() {
   }
 
   return (
-    <div>
-      <Link to="/">← Back to round types</Link>
-      <p>Round id: {draft.roundId}</p>
-      <label>
-        Title
-        <input value={draft.title} onChange={(event) => setTitle(event.target.value)} />
-      </label>
-      <label>
-        Category
-        <input value={draft.category} onChange={(event) => setCategory(event.target.value)} />
-      </label>
-
-      <h2>Clue</h2>
-      <label>
-        Clue text
-        <input value={draft.clueText} onChange={(event) => setClueText(event.target.value)} />
-      </label>
-      <MediaField
-        label="Clue media"
-        media={draft.clueMedia}
-        assets={draft.assets}
-        attachAsset={attachAsset}
-        onChange={setClueMedia}
+    <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-8">
+      <Link to="/" className="text-muted hover:text-strong">
+        ← Back to round types
+      </Link>
+      <p className="text-muted">Round id: {draft.roundId}</p>
+      <InputField
+        label="Title"
+        value={draft.title}
+        onChange={(event) => setTitle(event.target.value)}
+      />
+      <InputField
+        label="Category"
+        value={draft.category}
+        onChange={(event) => setCategory(event.target.value)}
       />
 
-      <h2>Answer</h2>
-      <label>
-        Answer text
-        <input value={draft.answerText} onChange={(event) => setAnswerText(event.target.value)} />
-      </label>
-      <MediaField
-        label="Answer media"
-        media={draft.answerMedia}
-        assets={draft.assets}
-        attachAsset={attachAsset}
-        onChange={setAnswerMedia}
-      />
+      <div className="flex flex-col gap-3">
+        <h2 className="font-display text-lg text-strong">Clue</h2>
+        <InputField
+          label="Clue text"
+          value={draft.clueText}
+          onChange={(event) => setClueText(event.target.value)}
+        />
+        <MediaField
+          label="Clue media"
+          media={draft.clueMedia}
+          assets={draft.assets}
+          attachAsset={attachAsset}
+          onChange={setClueMedia}
+        />
+      </div>
 
-      <h2>Preview</h2>
-      <article>
-        <h3>{draft.category}</h3>
-        <p>{draft.clueText}</p>
-        <p>{draft.answerText}</p>
-      </article>
+      <div className="flex flex-col gap-3">
+        <h2 className="font-display text-lg text-strong">Answer</h2>
+        <InputField
+          label="Answer text"
+          value={draft.answerText}
+          onChange={(event) => setAnswerText(event.target.value)}
+        />
+        <MediaField
+          label="Answer media"
+          media={draft.answerMedia}
+          assets={draft.assets}
+          attachAsset={attachAsset}
+          onChange={setAnswerMedia}
+        />
+      </div>
 
-      <div>
-        <button
-          type="button"
+      <div className="flex flex-col gap-2">
+        <h2 className="font-display text-lg text-strong">Preview</h2>
+        <article className="flex flex-col gap-2 rounded-lg border border-border bg-surface-1 p-4">
+          <h3 className="font-display text-base text-strong">{draft.category}</h3>
+          <p className="text-strong">{draft.clueText}</p>
+          <p className="text-muted">{draft.answerText}</p>
+        </article>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Button
           disabled={!validation.valid || exporting}
+          className="self-start"
           onClick={() => void handleExport(draft)}
         >
           {exporting ? 'Exporting…' : 'Export round'}
-        </button>
-        {!validation.valid && <p role="alert">{validation.error}</p>}
+        </Button>
+        {!validation.valid && (
+          <p role="alert" className="text-sm text-danger">
+            {validation.error}
+          </p>
+        )}
       </div>
     </div>
   );

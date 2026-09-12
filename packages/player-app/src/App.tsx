@@ -1,5 +1,5 @@
 import { SCHEMA_PACKAGE_NAME } from '@gameshow/schema';
-import { Button, Field } from '@gameshow/ui';
+import { Button, InputField } from '@gameshow/ui';
 import { useState } from 'react';
 import { createRoom } from './create-room.js';
 import {
@@ -35,7 +35,7 @@ function LinkJoinForm({ roomCode }: { roomCode: string }) {
       }}
     >
       <p className="text-muted">Room code: {roomCode}</p>
-      <Field label="Name" value={name} onChange={(event) => setName(event.target.value)} />
+      <InputField label="Name" value={name} onChange={(event) => setName(event.target.value)} />
       <Button type="submit" disabled={status === 'connecting' || status === 'connected'}>
         Join
       </Button>
@@ -67,7 +67,7 @@ function CreateOrJoinForm() {
 
   return (
     <div className="mx-auto flex max-w-sm flex-col gap-4 rounded-lg border border-border bg-surface-1 p-6">
-      <Field label="Name" value={name} onChange={(event) => setName(event.target.value)} />
+      <InputField label="Name" value={name} onChange={(event) => setName(event.target.value)} />
       <Button disabled={busy || creating} onClick={() => void handleCreateRoom()}>
         {creating ? 'Creating…' : 'Create room'}
       </Button>
@@ -84,7 +84,7 @@ function CreateOrJoinForm() {
           join(roomCode.trim(), name.trim());
         }}
       >
-        <Field
+        <InputField
           label="Room code"
           value={roomCode}
           onChange={(event) => setRoomCode(event.target.value)}
@@ -268,7 +268,7 @@ function HostControls({ phase, queueIds }: { phase: string; queueIds: string[] }
               Add Wheel fixture round
             </Button>
           </div>
-          <Field
+          <InputField
             label="Import round"
             type="file"
             accept=".zip"

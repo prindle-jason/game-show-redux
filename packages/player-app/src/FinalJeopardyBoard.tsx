@@ -7,6 +7,7 @@ import type {
   QueueEntryStatus,
   ResolvedClueContent,
 } from '@gameshow/schema';
+import { Button, InputField } from '@gameshow/ui';
 import { useEffect, useRef, useState } from 'react';
 import { ClueContentView, mediaUrlsFor } from './clue-content.js';
 import { useRoomStore } from './room-store.js';
@@ -56,16 +57,16 @@ function MediaWaitingPanel({ view }: { view: HostRoomView }) {
   );
 
   return (
-    <div>
-      <p>Waiting for players to finish loading media…</p>
+    <div className="flex flex-col gap-2">
+      <p className="text-muted">Waiting for players to finish loading media…</p>
       <ul>
         {waitingOn.map((player) => (
           <li key={player.id}>{player.name}</li>
         ))}
       </ul>
-      <button type="button" onClick={() => send({ type: 'reveal-media-anyway' })}>
+      <Button variant="secondary" onClick={() => send({ type: 'reveal-media-anyway' })}>
         Reveal anyway
-      </button>
+      </Button>
     </div>
   );
 }
@@ -103,18 +104,18 @@ function HostFinalJeopardyBoard({ view }: { view: HostRoomView }) {
   const advance = () => send({ type: 'round-action', action: { type: 'advance' } });
 
   return (
-    <div>
-      <h2>Final Jeopardy — {resolvedData.category}</h2>
+    <div className="flex flex-col gap-4">
+      <h2 className="font-display text-lg text-strong">Final Jeopardy — {resolvedData.category}</h2>
 
       {state.phase === 'category' && (
-        <button type="button" onClick={advance}>
+        <Button className="self-start" onClick={advance}>
           Start wagering
-        </button>
+        </Button>
       )}
 
       {state.phase === 'wagering' && (
-        <div>
-          <p>Wagering…</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-muted">Wagering…</p>
           <ul>
             {state.contestantIds.map((id) => (
               <li key={id}>
@@ -122,15 +123,15 @@ function HostFinalJeopardyBoard({ view }: { view: HostRoomView }) {
               </li>
             ))}
           </ul>
-          <button type="button" onClick={advance}>
+          <Button className="self-start" onClick={advance}>
             Reveal clue
-          </button>
+          </Button>
         </div>
       )}
 
       {state.phase === 'answering' && (
-        <div>
-          <p>
+        <div className="flex flex-col gap-2">
+          <p className="text-strong">
             Clue:{' '}
             <ClueContentView
               content={resolvedData.clue}
@@ -140,7 +141,7 @@ function HostFinalJeopardyBoard({ view }: { view: HostRoomView }) {
               }
             />
           </p>
-          <p>
+          <p className="text-strong">
             Correct answer: <ClueContentView content={resolvedData.answer} />
           </p>
           <ul>
@@ -150,9 +151,9 @@ function HostFinalJeopardyBoard({ view }: { view: HostRoomView }) {
               </li>
             ))}
           </ul>
-          <button type="button" onClick={advance}>
+          <Button className="self-start" onClick={advance}>
             Start reveal
-          </button>
+          </Button>
         </div>
       )}
 
@@ -178,57 +179,58 @@ function HostRevealPanel({
   const currentId = state.revealOrder[state.revealIndex];
 
   return (
-    <div>
-      <p>
+    <div className="flex flex-col gap-2">
+      <p className="text-strong">
         Correct answer: <ClueContentView content={resolvedData.answer} />
       </p>
       {currentId && (
-        <div>
-          <p>Revealing: {nameFor(view, currentId)}</p>
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-1 p-4">
+          <p className="text-strong">Revealing: {nameFor(view, currentId)}</p>
           {state.revealStage === 'hidden' && (
-            <button
-              type="button"
+            <Button
+              className="self-start"
               onClick={() => send({ type: 'round-action', action: { type: 'reveal-answer' } })}
             >
               Reveal answer
-            </button>
+            </Button>
           )}
           {state.revealStage === 'answer' && (
-            <div>
-              <p>Answer: {state.answers[currentId] || '(no answer)'}</p>
-              <button
-                type="button"
+            <div className="flex flex-col gap-2">
+              <p className="text-strong">Answer: {state.answers[currentId] || '(no answer)'}</p>
+              <Button
+                className="self-start"
                 onClick={() => send({ type: 'round-action', action: { type: 'reveal-wager' } })}
               >
                 Reveal wager
-              </button>
+              </Button>
             </div>
           )}
           {state.revealStage === 'wager' && (
-            <div>
-              <p>Wager: {state.wagers[currentId] ?? 0}</p>
-              <button
-                type="button"
-                onClick={() =>
-                  send({
-                    type: 'round-action',
-                    action: { type: 'judge', playerId: currentId, correct: true },
-                  })
-                }
-              >
-                Correct
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  send({
-                    type: 'round-action',
-                    action: { type: 'judge', playerId: currentId, correct: false },
-                  })
-                }
-              >
-                Incorrect
-              </button>
+            <div className="flex flex-col gap-2">
+              <p className="text-strong">Wager: {state.wagers[currentId] ?? 0}</p>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() =>
+                    send({
+                      type: 'round-action',
+                      action: { type: 'judge', playerId: currentId, correct: true },
+                    })
+                  }
+                >
+                  Correct
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() =>
+                    send({
+                      type: 'round-action',
+                      action: { type: 'judge', playerId: currentId, correct: false },
+                    })
+                  }
+                >
+                  Incorrect
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -272,24 +274,25 @@ function ContestantFinalJeopardyBoard({
 
   if (status === 'loading') {
     return (
-      <div>
-        <h2>Final Jeopardy</h2>
-        <p>Loading media…</p>
+      <div className="flex flex-col gap-2">
+        <h2 className="font-display text-lg text-strong">Final Jeopardy</h2>
+        <p className="text-muted">Loading media…</p>
       </div>
     );
   }
 
   return (
-    <div>
-      <h2>Final Jeopardy — {roundState.category}</h2>
+    <div className="flex flex-col gap-4">
+      <h2 className="font-display text-lg text-strong">Final Jeopardy — {roundState.category}</h2>
 
-      {roundState.phase === 'category' && <p>Get ready to wager!</p>}
+      {roundState.phase === 'category' && <p className="text-muted">Get ready to wager!</p>}
 
       {roundState.phase === 'wagering' &&
         (roundState.hasWagered ? (
-          <p>Wager submitted. Waiting for other contestants…</p>
+          <p className="text-muted">Wager submitted. Waiting for other contestants…</p>
         ) : (
           <form
+            className="flex items-end gap-2"
             onSubmit={(event) => {
               event.preventDefault();
               const amount = Number(wagerAmount);
@@ -297,24 +300,26 @@ function ContestantFinalJeopardyBoard({
               send({ type: 'round-action', action: { type: 'wager', amount } });
             }}
           >
-            <label>
-              Wager
-              <input value={wagerAmount} onChange={(event) => setWagerAmount(event.target.value)} />
-            </label>
-            <button type="submit">Submit wager</button>
+            <InputField
+              label="Wager"
+              value={wagerAmount}
+              onChange={(event) => setWagerAmount(event.target.value)}
+            />
+            <Button type="submit">Submit wager</Button>
           </form>
         ))}
 
       {roundState.phase === 'answering' && roundState.clue && (
-        <div>
-          <p>
+        <div className="flex flex-col gap-2">
+          <p className="text-strong">
             Clue:{' '}
             <ClueContentView content={roundState.clue} slideIndex={roundState.clueSlideIndex} />
           </p>
           {roundState.hasAnswered ? (
-            <p>Answer submitted. Waiting for other contestants…</p>
+            <p className="text-muted">Answer submitted. Waiting for other contestants…</p>
           ) : (
             <form
+              className="flex items-end gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
                 send({
@@ -323,11 +328,12 @@ function ContestantFinalJeopardyBoard({
                 });
               }}
             >
-              <label>
-                Answer
-                <input value={answerText} onChange={(event) => setAnswerText(event.target.value)} />
-              </label>
-              <button type="submit">Submit answer</button>
+              <InputField
+                label="Answer"
+                value={answerText}
+                onChange={(event) => setAnswerText(event.target.value)}
+              />
+              <Button type="submit">Submit answer</Button>
             </form>
           )}
         </div>

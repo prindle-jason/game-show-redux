@@ -8,7 +8,7 @@ import type {
   QueueEntryStatus,
   ResolvedClueContent,
 } from '@gameshow/schema';
-import { Button, Field } from '@gameshow/ui';
+import { Button, InputField } from '@gameshow/ui';
 import { useEffect, useRef, useState } from 'react';
 import { ClueContentView, mediaUrlsFor } from './clue-content.js';
 import { useRoomStore } from './room-store.js';
@@ -295,7 +295,7 @@ function ContestantJeopardyBoard({
                 send({ type: 'round-action', action: { type: 'wager', amount } });
               }}
             >
-              <Field
+              <InputField
                 label="Wager"
                 value={wagerAmount}
                 onChange={(event) => setWagerAmount(event.target.value)}
